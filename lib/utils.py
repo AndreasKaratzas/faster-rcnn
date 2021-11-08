@@ -1,14 +1,32 @@
 
+import os
 import torch
+import hashlib
 import torch.distributed as dist
 
 from typing import List, Tuple
 
+from lib.presets import DetectionPresetTrain, DetectionPresetEval, DetectionPresetTest
 
-def color_mapping_func(labels, mapping):
-    """Maps a label (integer or string) to a color"""
-    color_list = [mapping[value] for value in labels]
-    return color_list
+
+def get_transform(transform_class, img_size: int = 640):
+    if transform_class == "train":
+        return DetectionPresetTrain(img_size=img_size)
+    elif transform_class == "valid":
+        return DetectionPresetEval(img_size=img_size)
+    elif transform_class == "test":
+        return DetectionPresetTest(img_size=img_size)
+    else:
+        raise ValueError(
+            f"Transformation preference was invalid. Value parsed was {transform_class}\n")
+
+
+def get_hash(paths):
+    # Returns a single hash value of a list of paths (files or dirs)
+    size = sum(os.path.getsize(p) for p in paths if os.path.exists(p))  # sizes
+    h = hashlib.md5(str(size).encode())  # hash sizes
+    h.update(''.join(paths).encode())  # hash paths
+    return h.hexdigest()  # return hash
 
 
 def is_dist_avail_and_initialized():

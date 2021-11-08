@@ -3,7 +3,6 @@ import torch
 
 from typing import Tuple, List
 
-import torchvision
 from torchvision.ops import MultiScaleRoIAlign
 from torchvision.models.detection import FasterRCNN
 from torchvision.models.detection.rpn import AnchorGenerator, RPNHead
@@ -14,13 +13,14 @@ from lib.utils import list2tup, flatten
 
 
 def compile_backbone(
-    backbone_name: str = 'resnet50'
+    backbone_name: str = 'resnet50',
+    trainable_layers: int = 3
 ) -> torch.nn.Module:
     """Returns the backbone model."""
     if 'resnet' in backbone_name:
-        backbone = resnet_fpn_backbone(backbone_name, pretrained=True)
+        backbone = resnet_fpn_backbone(backbone_name, trainable_layers=trainable_layers, pretrained=True)
     elif 'mobilenet' in backbone_name:
-        backbone = mobilenet_backbone(backbone_name, pretrained=True)
+        backbone = mobilenet_backbone(backbone_name, trainable_layers=trainable_layers, pretrained=True)
     else:
         raise ValueError(
             f'Backbone model name option is invalid. Input value was {backbone_name}')
@@ -98,7 +98,7 @@ def configure_model(
     backbone_name: str,
     anchor_sizes: List[int],
     aspect_ratios: List[int],
-    in_channels: int = 256,
+    trainable_layers: int = 3,
     featmap_names: List[str] = ['0'],
     output_size: int = 7,
     sampling_ratio: int = 2,
@@ -110,7 +110,8 @@ def configure_model(
     image_std: List[int] =[0.229, 0.224, 0.225]
 ) -> FasterRCNN:
     """Driver definition for Faster R-CNN model compilation"""
-    backbone = compile_backbone(backbone_name=backbone_name)
+    backbone = compile_backbone(
+        backbone_name=backbone_name, trainable_layers=trainable_layers)
     
     rpn_anchor_generator = compile_anchor(
         anchor_sizes=list2tup(anchor_sizes),
@@ -118,7 +119,7 @@ def configure_model(
     )
 
     rpn_head = compile_rpn(
-        in_channels=in_channels,
+        in_channels=backbone.out_channels,
         num_anchors=rpn_anchor_generator.num_anchors_per_location()[0]
     )
 

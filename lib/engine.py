@@ -35,7 +35,8 @@ def train(
     epoch: int, 
     log_filepath: str,
     confirm: bool = False,
-    sample: float = 0.10
+    sample: float = 0.10,
+    num_classes: int = 12
 ):
     model.train()
     metric_logger = MetricLogger(f_path=log_filepath, delimiter="  ")
@@ -53,12 +54,15 @@ def train(
         if sample > 1.0 or sample < 0.0:
             raise ValueError(f"Option `sample` was not between [0, 1]. Input value was {sample}.")
 
-        visualize = VisualTest()
+        visualize = VisualTest(num_classes=num_classes)
         for images, targets in dataloader:
             if random() < sample:
                 for image, target in zip(images, targets):
-                    visualize.visualize(img=image * 255, boxes=target['boxes'])
-
+                    if target['boxes'].ndim < 1:
+                        target['boxes'] = target['boxes'].unsqueeze(0)
+                    
+                    visualize.visualize(
+                        img=image * 255, boxes=target['boxes'], labels=target['labels'])
 
     for images, targets in metric_logger.log_every(dataloader, verbosity, epoch + 1):
         images = list(image.to(device) for image in images)

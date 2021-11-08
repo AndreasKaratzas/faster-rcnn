@@ -1,5 +1,6 @@
 
 import os
+import json
 import math
 import torch
 import argparse
@@ -9,41 +10,48 @@ import torch.optim as optim
 from pathlib import Path
 from torch.utils.data import DataLoader
 
-from lib.utils import collate_fn
+from lib.utils import collate_fn, get_transform
 from lib.model import configure_model
 from lib.engine import train, validate
 from lib.plots import experiment_data_plots
-from lib.transformation import get_transform
 
 from lib.elitism import EliteModel
-from lib.dataloader import CustomDataset
+from lib.dataloader import CustomDetectionDataset
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='PyTorch Detection with Faster R-CNN.')
     parser.add_argument('--root-dir', default='./data', help='Root directory to output data.')
-    parser.add_argument('--dataset', default='./data/balloon', help='Path to dataset.')
-    parser.add_argument('--img-size', default=800, type=int,  help='Minimum image size.')
-    parser.add_argument('--num-classes', default=2, type=int,  help='Number of classes in dataset.')
-    parser.add_argument('--backbone', default='resnet101', help='Backbone CNN for Faster R-CNN.')
-    parser.add_argument('--batch-size', default=8, type=int, help='Batch size.')
+    parser.add_argument('--dataset', default='../data-faster', help='Path to dataset.')
+    parser.add_argument('--img-size', default=640, type=int,  help='Minimum image size (default: 640).')
+    parser.add_argument('--num-classes', default=12, type=int,  help='Number of classes in dataset including background.')
+    parser.add_argument('--backbone', default='resnet50', help='Backbone CNN for Faster R-CNN (default: resnet50).')
+    parser.add_argument('--batch-size', default=16, type=int,
+                        help='Batch size (default: 16).')
     parser.add_argument('--lr-scheduler', default="multisteplr", help='the lr scheduler (default: multisteplr).')
-    parser.add_argument('--epochs', default=300, type=int, metavar='N', help='Number of total epochs to run.')
-    parser.add_argument('--num-workers', default=1, type=int, metavar='N', help='Number of data loading workers (default: 1).')
-    parser.add_argument('--lr', default=1e-3, type=float, help='Initial learning rate.')
+    parser.add_argument('--epochs', default=100, type=int, metavar='N', help='Number of total epochs to run (default: 100).')
+    parser.add_argument('--num-workers', default=8, type=int, metavar='N', help='Number of data loading workers (default: 8).')
+    parser.add_argument('--lr', default=5e-3, type=float, help='Initial learning rate (default: 5e-3).')
     parser.add_argument('--momentum', default=0.9, type=float, metavar='M', help='Momentum.')
     parser.add_argument('--weight-decay', default=1e-4, type=float, metavar='W', help='weight decay (default: 1e-4).')
-    parser.add_argument('--lr-steps', default=[16000, 22000], nargs='+', type=int, help='Decrease lr every step-size epochs.')
-    parser.add_argument('--lr-gamma', default=0.1, type=float, help='Decrease lr by a factor of lr-gamma.')
-    parser.add_argument('--verbosity', default=5, type=int, help='Terminal log frequency.')
+    parser.add_argument('--lr-steps', default=[2000, 4000], nargs='+', type=int, help='Decrease lr every step-size epochs.')
+    parser.add_argument('--lr-gamma', default=1e-2, type=float, help='Decrease lr by a factor of lr-gamma.')
+    parser.add_argument('--verbosity', default=5, type=int, help='Terminal log frequency (default: 5).')
     parser.add_argument('--resume', type=str, default=None, help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--data-augmentation', default="hflip", help='Data augmentation policy (default: hflip).')
-    parser.add_argument('--pretrained', default=True, help='Use pre-trained models.', action="store_true")
-    parser.add_argument('--anchor-sizes', default=[32, 64, 128, 256, 512], nargs='+', type=int, help='Anchor sizes.')
-    parser.add_argument('--aspect-ratios', default=[0.5, 1.0, 2.0], nargs='+', type=int, help='Anchor ratios.')
+    parser.add_argument('--pretrained', default=True, help='Use pre-trained models (default: true).', action="store_true")
+    parser.add_argument('--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
+    parser.add_argument('--aspect-ratios', default=[0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int, help='Anchor ratios.')
     parser.add_argument('--start-epoch', default=0, type=int, help='Start epoch.')
+    parser.add_argument('--conf-threshold', default=0.5, type=float, help='Prediction score threshold.')
+    parser.add_argument('--trainable-layers', default=3,
+                        type=int, help='Number of CNN backbone layers to train (min: 0, max: 5, default: 3).')
     args = parser.parse_args()
 
+    # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
+    # Powershell:                     Dir | ren -NewName { $_.Name -replace ".png", ""}
     if not Path(args.root_dir).is_dir():
         raise ValueError(f"Root directory is invalid. Value parsed {args.root_dir}.")
     if not Path(args.dataset).is_dir():
@@ -52,48 +60,61 @@ if __name__ == "__main__":
         raise ValueError(f"Path to training image data does not exist.")
     if not os.path.isdir(os.path.join(args.dataset, "train", "labels")):
         raise ValueError(f"Path to training label data does not exist.")
-    if not os.path.isdir(os.path.join(args.dataset, "val", "images")):
+    if not os.path.isdir(os.path.join(args.dataset, "valid", "images")):
         raise ValueError(f"Path to validation image data does not exist.")
-    if not os.path.isdir(os.path.join(args.dataset, "val", "labels")):
+    if not os.path.isdir(os.path.join(args.dataset, "valid", "labels")):
         raise ValueError(f"Path to validation label data does not exist.")
 
+    if args.trainable_layers > 5 or args.trainable_layers < 0:
+        raise ValueError(f"Number of CNN backbone trainable layers must be an integer defined between 0 and 5.")
+    
     # initialize the computation device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Device utilized:\t[{device}]\n")
 
-    # dataloader training
-    train_data = CustomDataset(
+    # training dataset
+    train_data = CustomDetectionDataset(
         root_dir=os.path.join(args.dataset, "train"),
-        transforms=get_transform(True, args.data_augmentation)
+        img_size=args.img_size,
+        transforms=get_transform(
+            transform_class="train",
+            img_size=args.img_size)
     )
 
-    # dataloader validation
-    val_data = CustomDataset(
-        root_dir=os.path.join(args.dataset, "val"),
-        transforms=get_transform(False, args.data_augmentation)
+    # validation dataset
+    val_data = CustomDetectionDataset(
+        root_dir=os.path.join(args.dataset, "valid"),
+        img_size=args.img_size,
+        transforms=get_transform(
+            transform_class="valid",
+            img_size=args.img_size
+        )
     )
 
     print(
-        f'Training Faster R-CNN with model backbone {args.backbone} and anchor'
-        f' sizes {args.anchor_sizes} for {args.epochs} epochs.')
+        f'Training Faster R-CNN with model backbone {args.backbone} with {args.trainable_layers} trainable layers, anchor'
+        f' sizes {args.anchor_sizes} and aspect ratios {args.aspect_ratios} for {args.epochs} epochs.')
     print(f'Length of train data {len(train_data)}')
     print(f'Length of validation data {len(val_data)}')
 
-    # dataloader training
+    # training dataloader
     dataloader_train = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
         collate_fn=collate_fn,
+        pin_memory=True
     )
 
-    # dataloader validation
+    # validation dataloader
     dataloader_valid = DataLoader(
         dataset=val_data,
-        batch_size=1,
+        batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
         collate_fn=collate_fn,
+        pin_memory=True
     )
 
     # custom model init
@@ -101,7 +122,8 @@ if __name__ == "__main__":
         backbone_name=args.backbone,
         anchor_sizes=args.anchor_sizes,
         aspect_ratios=args.aspect_ratios,
-        min_size=args.img_size
+        num_classes=args.num_classes,
+        trainable_layers=args.trainable_layers
     )
  
     optimizer = optim.SGD(
@@ -122,20 +144,29 @@ if __name__ == "__main__":
     log_save_dir.mkdir(parents=True, exist_ok=True)
     plots_save_dir = Path(args.root_dir) / datetime_tag / "plots"
     plots_save_dir.mkdir(parents=True, exist_ok=True)
-    config_save_dir = Path(args.root_dir) / datetime_tag / "CONFIG"
+    config_save_dir = Path(args.root_dir) / datetime_tag / "CONFIG.json"
 
     with open(config_save_dir, "w") as f:
-        f.write(
-            f'Training Faster R-CNN with model backbone {args.backbone} and anchor'
-            f' sizes {args.anchor_sizes} for {args.epochs} epochs.\n'
-        )
-        f.write(
-            f"Training model from checkpoint {args.resume}. Starting from epoch {args.start_epoch}.\n"
-        )
-        f.write(
-            f"Dataset dir {args.dataset}.\n"
-        )
-    
+        data = {}
+
+        data['model'] = {
+            'backbone': args.backbone,
+            'anchors': args.anchor_sizes,
+            'ratios': args.aspect_ratios,
+            'epochs': args.epochs,
+            'checkpoint': args.resume,
+            'start': args.start_epoch,
+            'trainable': args.trainable_layers
+        }
+
+        data['dataset'] = {
+            'classes': args.num_classes,
+            'img_size': args.img_size,
+            'directory': args.dataset
+        }
+
+        json.dump(data, f)
+
     log_save_dir_train = log_save_dir / "training"
     log_save_dir_validation = log_save_dir / "validation"
 
@@ -195,7 +226,7 @@ if __name__ == "__main__":
     for epoch in range(args.start_epoch, args.epochs):
         
         train_logger = train(model=model, optimizer=optimizer, dataloader=dataloader_train, device=device,
-              verbosity=args.verbosity, epoch=epoch, log_filepath=log_save_dir_train)
+                             verbosity=args.verbosity, epoch=epoch, log_filepath=log_save_dir_train, num_classes=args.num_classes)
         train_logger.export_data()
         validate(model=model, dataloader=dataloader_valid, device=device,
                  verbosity=test_verbosity, log_filepath=log_save_dir_validation, epoch=epoch)
