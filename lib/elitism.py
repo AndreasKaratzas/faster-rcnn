@@ -24,14 +24,14 @@ class EliteModel():
         self.epoch = epoch
 
         df = pd.read_csv(
-            os.path.join(self.data_dir, 'training'), delim_whitespace=True)
+            os.path.join(self.data_dir, 'training.txt'), delim_whitespace=True)
         
         tr_loss = np.mean(df[df.Epoch == epoch].Loss)
         ob_loss = np.mean(df[df.Epoch == epoch].LossObjectness)
         cl_loss = np.mean(df[df.Epoch == epoch].LossClassifier)
 
         df = pd.read_csv(
-            os.path.join(self.data_dir, 'validation'), delim_whitespace=True)
+            os.path.join(self.data_dir, 'validation.txt'), delim_whitespace=True)
 
         epoch_ap = df[df.Epoch == epoch]
 

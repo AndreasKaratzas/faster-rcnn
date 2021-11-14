@@ -3,7 +3,10 @@ import sys
 import math
 import time
 import torch
+import numpy as np
 import torchvision
+
+from tqdm import tqdm
 from random import random
 
 from coco.coco_utils import get_coco_api_from_dataset
@@ -30,8 +33,8 @@ def train(
     model: torch.nn.Module, 
     optimizer: torch.optim.Optimizer, 
     dataloader: torch.utils.data.DataLoader, 
-    device: torch.device, 
-    verbosity: int, 
+    device: torch.device,
+    epochs: int,
     epoch: int, 
     log_filepath: str,
     confirm: bool = False,
@@ -64,42 +67,55 @@ def train(
                     visualize.visualize(
                         img=image * 255, boxes=target['boxes'], labels=target['labels'])
 
-    for images, targets in metric_logger.log_every(dataloader, verbosity, epoch + 1):
-        images = list(image.to(device) for image in images)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-        
-        loss_dict = model(images, targets)
-        
-        losses = sum(loss for loss in loss_dict.values())
-        
-        # reduce losses over all GPUs for logging purposes
-        loss_dict_reduced = reduce_dict(loss_dict)
-        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
-        
-        loss_value = losses_reduced.item()
+    print(f"\t{'Epoch':10}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
+    with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
+        for images, targets in metric_logger.log_every(dataloader, epoch + 1):
+            images = list(image.to(device) for image in images)
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+            
+            loss_dict = model(images, targets)
+            
+            losses = sum(loss for loss in loss_dict.values())
+            
+            # reduce losses over all GPUs for logging purposes
+            loss_dict_reduced = reduce_dict(loss_dict)
+            losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+            
+            loss_value = losses_reduced.item()
 
-        if not math.isfinite(loss_value):
-            print("Loss is {}, stopping training".format(loss_value))
-            print(loss_dict_reduced)
-            sys.exit(1)
+            if not math.isfinite(loss_value):
+                print("Loss is {}, stopping training".format(loss_value))
+                print(loss_dict_reduced)
+                sys.exit(1)
 
-        optimizer.zero_grad()
-        losses.backward()
-        optimizer.step()
+            optimizer.zero_grad()
+            losses.backward()
+            optimizer.step()
 
-        if lr_scheduler is not None:
-            lr_scheduler.step()
+            if lr_scheduler is not None:
+                lr_scheduler.step()
+            
+            metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
+            metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+            
+            lr, loss, loss_classifier, loss_box_reg, loss_objectness, loss_rpn_box_reg = metric_logger.get_metrics()
+            
+            pbar.set_description(('%13s' + '%12s' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' * 3) % (
+                f'{epoch + 1}/{epochs}', 
+                f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G',
+                lr, loss, loss_classifier, loss_box_reg, loss_objectness, loss_rpn_box_reg))
+            
+            pbar.update(1)
         
-        metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
-        metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+        pbar.close()
+
     return metric_logger
 
 @torch.no_grad()
 def validate(
     model: torch.nn.Module, 
     dataloader: torch.utils.data.DataLoader, 
-    device: torch.device, 
-    verbosity: int, 
+    device: torch.device,
     log_filepath: str,
     epoch: int
 ):
@@ -107,13 +123,17 @@ def validate(
     torch.set_num_threads(1)
     cpu_device = torch.device("cpu")
     model.eval()
-    metric_logger = MetricLogger(f_path=log_filepath, delimiter="  ")
-
+    
     coco = get_coco_api_from_dataset(dataloader.dataset)
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types, log_filepath, epoch)
-    
-    for images, targets in metric_logger.log_every(dataloader, verbosity, -1):
+
+    pbar = tqdm(dataloader, desc=f"{'               mAP@.5:.95':29}"
+                                 f"{'mAP@.5':11}{'mAP@.75':11}"
+                                 f"{'mAP@s':10}{'mAP@m':10}"
+                                 f"{'mAP@l':9}{'Recall':6}",
+                bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}')
+    for images, targets in pbar:
         images = list(image.to(device) for image in images)
         
         if torch.cuda.is_available():
@@ -127,18 +147,16 @@ def validate(
 
         res = {target["image_id"].item(): output for target,
                output in zip(targets, outputs)}
-        evaluator_time = time.time()
         coco_evaluator.update(res)
-        evaluator_time = time.time() - evaluator_time
-        metric_logger.update(model_time=model_time,
-                             evaluator_time=evaluator_time)
     
     # gather the stats from all processes
-    metric_logger.synchronize_between_processes()
-    print("Averaged stats:", metric_logger)
     coco_evaluator.synchronize_between_processes()
     
     # accumulate predictions from all images
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
+
+    print(('%25.3g' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' + '%10.3g' + '%10.3g') % (
+        coco_evaluator.stats[0], coco_evaluator.stats[1], coco_evaluator.stats[2], coco_evaluator.stats[3],
+        coco_evaluator.stats[4], coco_evaluator.stats[5], np.mean(coco_evaluator.stats[6:])))
     torch.set_num_threads(n_threads)

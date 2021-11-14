@@ -29,7 +29,7 @@ def slugify(value, allow_unicode=False):
 
 def export_training_plots(root_dir: str, out_dir: str, dpi: int = 300):
     training_res_data = pd.read_csv(os.path.join(
-        root_dir, 'training'), delim_whitespace=True)
+        root_dir, 'training.txt'), delim_whitespace=True)
 
     train_res_preprocessed = training_res_data.groupby(
         by="Epoch", dropna=False).mean()
@@ -47,7 +47,7 @@ def export_training_plots(root_dir: str, out_dir: str, dpi: int = 300):
 
 def export_validation_plots(root_dir: str, out_dir: str, dpi: int = 300):
     validation_res_data = pd.read_csv(os.path.join(
-        root_dir, 'validation'), delim_whitespace=True)
+        root_dir, 'validation.txt'), delim_whitespace=True)
 
     validation_res_data = validation_res_data.astype({'MaxDets': 'str'})
     
@@ -96,11 +96,11 @@ if __name__ == '__main__':
     if not Path(args.out_dir).is_dir():
         Path(args.out_dir).mkdir(parents=True, exist_ok=True)
     
-    if not os.path.isfile(os.path.join(args.root_dir, 'training')):
+    if not os.path.isfile(os.path.join(args.root_dir, 'training.txt')):
         raise ValueError(
-            f"Training data file not found. Tried to access {os.path.join(args.root_dir, 'training')}.")
-    if not os.path.isfile(os.path.join(args.root_dir, 'validation')):
+            f"Training data file not found. Tried to access {os.path.join(args.root_dir, 'training.txt')}.")
+    if not os.path.isfile(os.path.join(args.root_dir, 'validation.txt')):
         raise ValueError(
-            f"Validation data file not found. Tried to access {os.path.join(args.root_dir, 'validation')}.")
+            f"Validation data file not found. Tried to access {os.path.join(args.root_dir, 'validation.txt')}.")
 
     experiment_data_plots(root_dir=args.root_dir, out_dir=args.out_dir)

@@ -24,6 +24,7 @@ class CocoEvaluator(object):
 
         self.iou_types = iou_types
         self.coco_eval = {}
+        self.stats = []
         for iou_type in iou_types:
             self.coco_eval[iou_type] = COCOeval(coco_gt, iouType=iou_type)
 
@@ -59,9 +60,12 @@ class CocoEvaluator(object):
 
     def summarize(self):
         for iou_type, coco_eval in self.coco_eval.items():
-            print("IoU metric: {}".format(iou_type))
+            # print("IoU metric: {}".format(iou_type))
             val_metrics = coco_eval.summarize()
-        self.export(val_metrics)
+            self.export(val_metrics)
+        
+        for iou_type in val_metrics:
+            self.stats.append(np.around(iou_type['value'], decimals=3))
     
     def export(self, val_metrics):
         with open(self.log_dir, "a") as f:

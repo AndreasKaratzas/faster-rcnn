@@ -1,14 +1,15 @@
 
-import torch
-import matplotlib
-import numpy as np
-import matplotlib.pyplot as plt
-import torchvision.transforms.functional as F
-
+from pathlib import Path
 from typing import List
+
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+import torchvision.transforms.functional as F
 from PIL import ImageColor
-from torchvision.utils import draw_bounding_boxes
 from torchvision.transforms.functional import convert_image_dtype
+from torchvision.utils import draw_bounding_boxes
 
 
 class Visual():
@@ -43,11 +44,29 @@ class Visual():
             axs[0, i].imshow(np.asarray(img))
             axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 
+        plt.tight_layout()
         plt.show()
+    
+    def export(self, img_set, file_idx: int):
+        if not isinstance(img_set, list):
+            img_set = [img_set]
+
+        fig, axs = plt.subplots(ncols=len(img_set), squeeze=False)
+
+        for i, img in enumerate(img_set):
+            img = img.detach()
+            img = F.to_pil_image(img)
+            axs[0, i].imshow(np.asarray(img))
+            axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
+
+        plt.tight_layout()
+        plt.savefig(self.results_dir / Path('batch_' + str(file_idx) + '.png'), dpi=400)
 
     @torch.no_grad()
-    def test_model(self, dataloader: torch.utils.data.DataLoader, line_width: int = 3):
-        for batch in dataloader:
+    def test_model(self, dataloader: torch.utils.data.DataLoader, results_dir: Path, no_visual: bool = True, no_save: bool = False, line_width: int = 3):
+        
+        self.results_dir = results_dir
+        for idx, batch in enumerate(dataloader):
             
             # This preprocesses raw batch
             batch = convert_image_dtype(
@@ -63,9 +82,13 @@ class Visual():
                 for img, output in zip(batch, outputs)
             ]
             
-            # Visualize result
-            self.show(vis_result)
+            if not no_visual:
+                # Visualize result
+                self.show(img_set=vis_result)
 
+            if not no_save:
+                # Export result
+                self.export(img_set=vis_result, file_idx=idx)
 
 class VisualTest():
     def __init__(self, num_classes: int = 12):

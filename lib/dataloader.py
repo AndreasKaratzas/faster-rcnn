@@ -16,9 +16,8 @@ IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
 class CustomDetectionDataset(Dataset):
     # TODO cache dataset
     # https://github.com/ultralytics/yolov5/blob/79bca2bf64da04e7e1e74a132eb54171f41638cc/utils/datasets.py#L392
-    def __init__(self, root_dir, img_size: int = 1280, transforms=None):
+    def __init__(self, root_dir, transforms=None):
         self.root_dir = root_dir
-        self.img_size = img_size
         self.transforms = transforms
         self.images = list(
             sorted(os.listdir(os.path.join(root_dir, "images"))))
