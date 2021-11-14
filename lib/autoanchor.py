@@ -38,16 +38,13 @@ def autoanchors(dataloader: DataLoader, n_anchors: int = 5, outlier_segment: flo
 
     # configure buckets
     n_samples = anchors.shape[0]
-
     bucket_size = n_samples // (n_anchors - 1)
 
-    # print(f"\nRemoving outliers ...\n")
+    # Removing outliers
     aspects = aspects[:int(n_samples * (1 - outlier_segment))]
     aspects = aspects[int(n_samples * outlier_segment):]
     anchors = anchors[:int(n_samples * (1 - outlier_segment))]
     anchors = anchors[int(n_samples * outlier_segment):]
-
-    # print(f"Minimum aspect ratio found:\t{np.min(aspects)}\nMaximum aspect ratio found:\t{np.max(aspects)}\n")
 
     # estimate best anchor sizes
     anchor_sizes = []
@@ -74,9 +71,5 @@ def autoanchors(dataloader: DataLoader, n_anchors: int = 5, outlier_segment: flo
     aspect_ratios = np.array(aspect_ratios)
     aspect_ratios = np.around(np.linspace(start=np.min(
         aspect_ratios), stop=np.max(aspect_ratios), num=5), decimals=2)
-
-    # output result
-    # print(f"Anchor sizes recommended:\t{anchor_sizes}")
-    # print(f"Aspect ratios recommended:\t{aspect_ratios}\n")
 
     return anchor_sizes, aspect_ratios

@@ -1,5 +1,4 @@
 
-import time
 import copy
 import datetime
 import numpy as np
@@ -124,14 +123,10 @@ class COCOeval:
         Run per image evaluation on given images and store results (a list of dict) in self.evalImgs
         :return: None
         '''
-        tic = time.time()
-        print('Running per image evaluation...')
         p = self.params
         # add backward compatibility if useSegm is specified in params
         if not p.useSegm is None:
             p.iouType = 'segm' if p.useSegm == 1 else 'bbox'
-            print('useSegm (deprecated) is not None. Running {} evaluation'.format(p.iouType))
-        print('Evaluate annotation type *{}*'.format(p.iouType))
         p.imgIds = list(np.unique(p.imgIds))
         if p.useCats:
             p.catIds = list(np.unique(p.catIds))
@@ -158,8 +153,6 @@ class COCOeval:
                  for imgId in p.imgIds
              ]
         self._paramsEval = copy.deepcopy(self.params)
-        toc = time.time()
-        # print('DONE (t={:0.2f}s).'.format(toc-tic))
 
     def computeIoU(self, imgId, catId):
         p = self.params
@@ -199,7 +192,6 @@ class COCOeval:
         dts = [dts[i] for i in inds]
         if len(dts) > p.maxDets[-1]:
             dts = dts[0:p.maxDets[-1]]
-        # if len(gts) == 0 and len(dts) == 0:
         if len(gts) == 0 or len(dts) == 0:
             return []
         ious = np.zeros((len(dts), len(gts)))
@@ -319,8 +311,6 @@ class COCOeval:
         :param p: input params for evaluation
         :return: None
         '''
-        # print('Accumulating evaluation results...')
-        tic = time.time()
         if not self.evalImgs:
             print('Please run evaluate() first')
         # allows input customized parameters
@@ -417,8 +407,6 @@ class COCOeval:
             'recall':   recall,
             'scores': scores,
         }
-        toc = time.time()
-        # print('DONE (t={:0.2f}s).'.format( toc-tic))
 
     def summarize(self):
         '''
@@ -427,9 +415,7 @@ class COCOeval:
         '''
         def _summarize( ap=1, iouThr=None, areaRng='all', maxDets=100 ):
             p = self.params
-            iStr = ' {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
             titleStr = 'Average Precision' if ap == 1 else 'Average Recall'
-            typeStr = '(AP)' if ap==1 else '(AR)'
             iouStr = '{:0.2f}:{:0.2f}'.format(p.iouThrs[0], p.iouThrs[-1]) \
                 if iouThr is None else '{:0.2f}'.format(iouThr)
 
@@ -454,7 +440,6 @@ class COCOeval:
                 mean_s = -1
             else:
                 mean_s = np.mean(s[s>-1])
-            # print(iStr.format(titleStr, typeStr, iouStr, areaRng, maxDets, mean_s))
             self.val_metrics.append({
                 'title': titleStr,
                 'IoU': iouStr,
