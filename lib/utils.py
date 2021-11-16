@@ -6,7 +6,7 @@ import torch.distributed as dist
 
 from typing import List, Tuple
 
-from lib.presets import DetectionPresetTrain, DetectionPresetEval, DetectionPresetTest
+from lib.presets import  DetectionPresetTrain, DetectionPresetEval, DetectionPresetTest
 
 
 def get_transform(transform_class, img_size: int = 640):

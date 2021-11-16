@@ -91,6 +91,7 @@ class Visual():
                 self.export(img_set=vis_result, file_idx=idx)
 
 class VisualTest():
+    # TODO fix this class for xyxy and not xywhn
     def __init__(self, num_classes: int = 12):
         super().__init__()
 

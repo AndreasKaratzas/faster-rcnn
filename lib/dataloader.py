@@ -14,8 +14,7 @@ IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
                'dng', 'webp', 'mpo']  # acceptable image suffixes
 
 class CustomDetectionDataset(Dataset):
-    # TODO cache dataset
-    # https://github.com/ultralytics/yolov5/blob/79bca2bf64da04e7e1e74a132eb54171f41638cc/utils/datasets.py#L392
+    # TODO https://github.com/szymonmaszke/torchdata
     def __init__(self, root_dir, transforms=None):
         self.root_dir = root_dir
         self.transforms = transforms
@@ -79,7 +78,7 @@ class TestDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         if self.transforms is not None:
-            image = self.transforms(image=image)["image"]
+            image = self.transforms(image=image)
 
         return image
 

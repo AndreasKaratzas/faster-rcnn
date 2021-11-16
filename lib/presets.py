@@ -58,10 +58,9 @@ class DetectionPresetEval:
             [[c, *b] for c, b in zip(res_augmented['class_labels'], res_augmented['bboxes'])])
         return img, labels
 
-
 class DetectionPresetTest:
     def __init__(self, img_size: int = 640):
-        
+
         self.transforms = A.Compose([
             A.LongestMaxSize(max_size=img_size),
             A.PadIfNeeded(min_height=img_size, min_width=img_size,
@@ -69,9 +68,32 @@ class DetectionPresetTest:
             A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)),
             ToTensorV2()
         ])
+
+    def __call__(self, image):
+        return self.transforms(image=image)["image"]
+
+class DetectionPresetImageOnly:
+    def __init__(self, img_size: int = 640):
+        
+        self.transforms = A.Compose([
+            A.LongestMaxSize(max_size=img_size),
+            A.PadIfNeeded(min_height=img_size, min_width=img_size,
+                          value=0, border_mode=cv2.BORDER_CONSTANT)
+        ])
         
     def __call__(self, image):
-        return self.transforms(image=image)
+        return self.transforms(image=image)["image"]
 
 
+class DetectionPresetTargetOnly:
+    def __init__(self, img_size: int = 640):
+
+        self.transforms = A.Compose([
+            A.LongestMaxSize(max_size=img_size),
+            A.PadIfNeeded(min_height=img_size, min_width=img_size,
+                          value=0, border_mode=cv2.BORDER_CONSTANT)
+        ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['class_labels']))
+
+    def __call__(self, bboxes):
+        return self.transforms(bboxes=bboxes)["bboxes"]
 
