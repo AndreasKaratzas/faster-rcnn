@@ -191,7 +191,7 @@ class CustomCachedDetectionDataset(Dataset):
             _results = []
             # initialize single threaded image fetching operation
             for x in range(self.num_samples):
-                _results.append(_load_image(*x))
+                _results.append(_load_image(self=self, img_idx=x))
 
         # keep user informed with a TQDM bar
         pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
