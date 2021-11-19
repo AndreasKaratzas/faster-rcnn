@@ -182,13 +182,13 @@ class CustomCachedDetectionDataset(Dataset):
         self.images = [None] * self.num_samples
         # register memory allocated in RAM
         _allocated_mem = 0
-
+        # make `_results` available out of if conditional scope
+        _results = []
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
             _results = ThreadPool(self.num_threads).map(
                 lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
         else:
-            _results = []
             # initialize single threaded image fetching operation
             for x in range(self.num_samples):
                 _results.append(_load_image(self=self, img_idx=x))
