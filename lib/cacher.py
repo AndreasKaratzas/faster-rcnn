@@ -182,30 +182,37 @@ class CustomCachedDetectionDataset(Dataset):
         self.images = [None] * self.num_samples
         # register memory allocated in RAM
         _allocated_mem = 0
-        # make `_results` available out of if conditional scope
-        _results = []
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
             _results = ThreadPool(self.num_threads).map(
                 lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
+            # keep user informed with a TQDM bar
+            pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
+            # loop through samples
+            for image_idx, image_sample in pbar:
+                # cache image
+                self.images[image_idx] = image_sample
+                # update allocated memory register
+                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
+                # update RAM status
+                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
+            pbar.close()
         else:
+            # keep user informed with a TQDM bar
+            pbar = tqdm(range(self.num_samples), total=self.num_samples,
+                        unit=" samples processed")
             # initialize single threaded image fetching operation
-            for x in range(self.num_samples):
-                _results.append(_load_image(self=self, img_idx=x))
+            for image_idx in pbar:
+                # cache image
+                self.images[image_idx] = _load_image(
+                    self=self, img_idx=image_idx)
+                # update allocated memory register
+                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
+                # update RAM status
+                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
+            pbar.close()
 
-        # keep user informed with a TQDM bar
-        pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
-        # loop through samples
-        for image_idx, image_sample in pbar:
-            # cache image
-            self.images[image_idx] = image_sample
-            # update allocated memory register
-            _allocated_mem += np.asarray(self.images[image_idx]).nbytes
-            # update RAM status
-            pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
-        pbar.close()
-        
-        
+
     def _config_cache(self, cache_path: Path):
         # create cache
         cache = self._cache_labels(cache_path)
