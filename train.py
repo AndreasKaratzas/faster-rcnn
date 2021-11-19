@@ -29,8 +29,8 @@ if __name__ == "__main__":
                         help='Root directory to output data.')
     parser.add_argument('--dataset', default='../data-faster',
                         help='Path to dataset.')
-    parser.add_argument('--img-size', default=1280, type=int,
-                        help='Image size (default: 1280).')
+    parser.add_argument('--img-size', default=640, type=int,
+                        help='Image size (default: 640).')
     parser.add_argument('--num-classes', default=12, type=int,
                         help='Number of classes in dataset including background.')
     parser.add_argument('--backbone', default='resnet50',
