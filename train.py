@@ -57,9 +57,9 @@ if __name__ == "__main__":
                         help='Decrease lr by a factor of lr-gamma.')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--cache', default=True, action='store_true', type=bool,
+    parser.add_argument('--cache', default=True, action='store_true',
                         help='Cache the images found in the dataset (default: True).')
-    parser.add_argument('--pretrained', default=True, type=bool,
+    parser.add_argument('--pretrained', default=True,
                         help='Use pre-trained models (default: true).', action="store_true")
     parser.add_argument(
         '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
@@ -73,11 +73,11 @@ if __name__ == "__main__":
                         type=float, help='Prediction score threshold.')
     parser.add_argument('--trainable-layers', default=3,
                         type=int, help='Number of CNN backbone layers to train (min: 0, max: 5, default: 3).')
-    parser.add_argument('--no-visual', default=True, action='store_true', type=bool,
+    parser.add_argument('--no-visual', default=True, action='store_true',
                         help='Disable visualization software in test mode.')
-    parser.add_argument('--no-save', default=False, action='store_true', type=bool,
+    parser.add_argument('--no-save', default=False, action='store_true',
                         help='Disable results export software.')
-    parser.add_argument('--no-threading-linux', default=True, action='store_true', type=bool,
+    parser.add_argument('--no-threading-linux', default=True, action='store_true',
                         help='Disable multithreading library in Linux due to possible race conditions.')
     args = parser.parse_args()
 
