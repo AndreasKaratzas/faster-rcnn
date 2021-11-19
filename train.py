@@ -4,6 +4,7 @@ import datetime
 import json
 import os
 import warnings
+import platform
 from pathlib import Path
 
 import torch
@@ -28,8 +29,8 @@ if __name__ == "__main__":
                         help='Root directory to output data.')
     parser.add_argument('--dataset', default='../data-faster',
                         help='Path to dataset.')
-    parser.add_argument('--img-size', default=640, type=int,
-                        help='Image size (default: 640).')
+    parser.add_argument('--img-size', default=1280, type=int,
+                        help='Image size (default: 1280).')
     parser.add_argument('--num-classes', default=12, type=int,
                         help='Number of classes in dataset including background.')
     parser.add_argument('--backbone', default='resnet50',
@@ -48,14 +49,14 @@ if __name__ == "__main__":
                         type=float, metavar='M', help='Momentum.')
     parser.add_argument('--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4).')
-    parser.add_argument('--lr-steps', default=[2000, 4000], nargs='+',
+    parser.add_argument('--lr-steps', default=[16000, 22000], nargs='+',
                         type=int, help='Decrease lr every step-size epochs.')
     parser.add_argument('--lr-gamma', default=1e-2, type=float,
                         help='Decrease lr by a factor of lr-gamma.')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--cache', default=False, action='store_true',
-                        help='Cache the images found in the dataset.')
+    parser.add_argument('--cache', default=True, action='store_true',
+                        help='Cache the images found in the dataset (default: True).')
     parser.add_argument('--pretrained', default=True,
                         help='Use pre-trained models (default: true).', action="store_true")
     parser.add_argument(
@@ -68,12 +69,14 @@ if __name__ == "__main__":
                         type=int, help='Start epoch.')
     parser.add_argument('--conf-threshold', default=0.5,
                         type=float, help='Prediction score threshold.')
-    parser.add_argument('--trainable-layers', default=3,
+    parser.add_argument('--trainable-layers', default=4,
                         type=int, help='Number of CNN backbone layers to train (min: 0, max: 5, default: 3).')
     parser.add_argument('--no-visual', default=True, action='store_true',
                         help='Disable visualization software in test mode.')
     parser.add_argument('--no-save', default=False, action='store_true',
                         help='Disable results export software.')
+    parser.add_argument('--no-threading-linux', default=True, action='store_true',
+                        help='Disable multithreading library in Linux due to possible race conditions.')
     args = parser.parse_args()
 
     # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
@@ -95,6 +98,14 @@ if __name__ == "__main__":
     if args.trainable_layers > 5 or args.trainable_layers < 0:
         raise ValueError(
             f"Number of CNN backbone trainable layers must be an integer defined between 0 and 5.")
+    
+    # check platform and reconfigure number of workers
+    if platform.system() == "Linux" and args.no_threading_linux:
+        args.num_workers = 1
+        print(f"WARNING:"
+            f"\n\tOS family is Linux."
+            f"\n\tLibrary `multithreading` in Python might not function well."
+            f"\n\tSetting number of workers equal to {args.num_workers}.\n")
 
     # initialize the computation device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

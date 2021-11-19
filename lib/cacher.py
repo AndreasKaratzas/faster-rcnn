@@ -140,11 +140,27 @@ class CustomCachedDetectionDataset(Dataset):
         x, msgs = {}, []
 
         desc = f"Scanning '{cache_path.parent.name}' directory for images and labels"
-        with Pool(self.num_threads) as pool:
-            pbar = tqdm(pool.map(_verify_lbl2img_path, zip(
-                self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files), unit=" samples processed")
-            # verify target files w.r.t. images found in the dataset
-            for img_file, lbl, width, height, msg in pbar:
+
+        if self.num_threads > 1:
+            with Pool(self.num_threads) as pool:
+                pbar = tqdm(pool.map(_verify_lbl2img_path, zip(
+                    self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files), unit=" samples processed")
+                # verify target files w.r.t. images found in the dataset
+                for img_file, lbl, width, height, msg in pbar:
+                    # reduce target dimensions w.r.t. image dimensionality reduction ratio
+                    lbl = self.reduce_target(
+                        target=lbl, height=height, width=width)
+                    # record targets or message indicating a failure in the parsing process
+                    if img_file:
+                        x[img_file] = lbl
+                    if msg:
+                        msgs.append(msg)
+            pbar.close()
+        else:
+            pbar = tqdm(zip(self.img_files, self.lbl_files), desc=desc, total=len(self.img_files), unit=" samples processed")
+            for img_file, lbl_file in pbar:
+                # verify target files w.r.t. images found in the dataset
+                img_file, lbl, width, height, msg = _verify_lbl2img_path((img_file, lbl_file))
                 # reduce target dimensions w.r.t. image dimensionality reduction ratio
                 lbl = self.reduce_target(
                     target=lbl, height=height, width=width)
@@ -153,7 +169,7 @@ class CustomCachedDetectionDataset(Dataset):
                     x[img_file] = lbl
                 if msg:
                     msgs.append(msg)
-        pbar.close()
+            pbar.close()
 
         # print warnings
         if msgs:
@@ -166,9 +182,17 @@ class CustomCachedDetectionDataset(Dataset):
         self.images = [None] * self.num_samples
         # register memory allocated in RAM
         _allocated_mem = 0
-        # initialize multithreaded image fetching operation
-        _results = ThreadPool(self.num_threads).map(
-            lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
+
+        if self.num_threads > 1:
+            # initialize multithreaded image fetching operation
+            _results = ThreadPool(self.num_threads).map(
+                lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
+        else:
+            _results = []
+            # initialize single threaded image fetching operation
+            for x in range(self.num_samples):
+                _results.append(_load_image(*x))
+
         # keep user informed with a TQDM bar
         pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
         # loop through samples
@@ -180,7 +204,8 @@ class CustomCachedDetectionDataset(Dataset):
             # update RAM status
             pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
         pbar.close()
-
+        
+        
     def _config_cache(self, cache_path: Path):
         # create cache
         cache = self._cache_labels(cache_path)
