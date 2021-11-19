@@ -199,12 +199,20 @@ class CustomCachedDetectionDataset(Dataset):
             pbar.close()
         else:
             # keep user informed with a TQDM bar
-            pbar = tqdm(enumerate(zip(repeat(self), range(self.num_samples))), total=self.num_samples,
+            pbar = tqdm(range(self.num_samples), total=self.num_samples,
                         unit=" samples processed")
             # initialize single threaded image fetching operation
-            for image_idx, *x in pbar:
+            for image_idx in pbar:
+                # fetch if it does not exist
+                img_path = self.img_files[image_idx]
+                # load image sample
+                img = Image.open(image_idx).convert("RGB")
+                # reduce image dimensions
+                img = self.reduce_image(img=img)
+                # assert error if image was not found
+                assert img is not None, f'Image Not Found {image_idx}'
                 # cache image
-                self.images[image_idx] = _load_image(*x)
+                self.images[image_idx] = img
                 # update allocated memory register
                 _allocated_mem += np.asarray(self.images[image_idx]).nbytes
                 # update RAM status
