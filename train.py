@@ -32,15 +32,15 @@ if __name__ == "__main__":
                         help='Image size (default: 640).')
     parser.add_argument('--num-classes', default=12, type=int,
                         help='Number of classes in dataset including background.')
-    parser.add_argument('--backbone', default='resnet18',
+    parser.add_argument('--backbone', default='resnet50',
                         help='Backbone CNN for Faster R-CNN (default: resnet50).')
-    parser.add_argument('--batch-size', default=4, type=int,
+    parser.add_argument('--batch-size', default=16, type=int,
                         help='Batch size (default: 16).')
     parser.add_argument('--lr-scheduler', default="multisteplr",
                         help='the lr scheduler (default: multisteplr).')
-    parser.add_argument('--epochs', default=20, type=int, metavar='N',
+    parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='Number of total epochs to run (default: 100).')
-    parser.add_argument('--num-workers', default=1, type=int, metavar='N',
+    parser.add_argument('--num-workers', default=8, type=int, metavar='N',
                         help='Number of data loading workers (default: 8).')
     parser.add_argument('--lr', default=1e-3, type=float,
                         help='Initial learning rate (default: 1e-3).')
