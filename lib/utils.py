@@ -1,5 +1,6 @@
 
 import os
+import sys
 import torch
 import hashlib
 import torch.distributed as dist
@@ -7,6 +8,16 @@ import torch.distributed as dist
 from typing import List, Tuple
 
 from lib.presets import DetectionPresetTrainTorchVision, DetectionPresetEvalTorchVision, DetectionPresetTestTorchVision
+
+
+# Disable
+def blockPrint():
+    sys.stdout = open(os.devnull, 'w')
+
+
+# Restore
+def enablePrint():
+    sys.stdout = sys.__stdout__
 
 
 def get_transform(transform_class: str, img_size: int = 640):

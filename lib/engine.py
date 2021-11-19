@@ -4,7 +4,6 @@ import math
 import time
 import torch
 import numpy as np
-from torch.utils import data
 import torchvision
 
 from tqdm import tqdm
@@ -12,7 +11,7 @@ from random import random
 from statistics import mean
 
 from coco.coco_utils import get_coco_api_from_dataset
-from lib.utils import reduce_dict, warmup_lr_scheduler
+from lib.utils import reduce_dict, warmup_lr_scheduler, blockPrint, enablePrint
 
 from lib.visual import VisualTest
 from coco.coco_eval import CocoEvaluator
@@ -144,21 +143,13 @@ def validate(
     torch.set_num_threads(1)
     cpu_device = torch.device("cpu")
     model.eval()
-
-    # visualize = VisualTest(num_classes=12, res_dir='./data/results')
-    # for images, targets in dataloader:
-    #     for image, target in zip(images, targets):
-
-    #         if target['boxes'].ndim < 1:
-    #             target['boxes'] = target['boxes'].unsqueeze(0)
-            
-    #         visualize.visualize(
-    #             img=image * 255, boxes=target['boxes'], labels=target['labels'], 
-    #             no_visual=True, no_save=False)
     
+    # TODO https://stackoverflow.com/questions/8391411/how-to-block-calls-to-print
+    blockPrint()
     coco = get_coco_api_from_dataset(dataloader.dataset)
     iou_types = _get_iou_types(model)
     coco_evaluator = CocoEvaluator(coco, iou_types, log_filepath, epoch + 1)
+    enablePrint()
 
     pbar = tqdm(dataloader, desc=f"{'               mAP@.5:.95':29}"
                                  f"{'mAP@.5':11}{'mAP@.75':11}"

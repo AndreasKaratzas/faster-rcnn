@@ -29,15 +29,17 @@ if __name__ == "__main__":
                         help='Root directory to output data.')
     parser.add_argument('--dataset', default='../data-faster',
                         help='Path to dataset.')
+    parser.add_argument('--project', default='AITrain', type=str,
+                        help='Name of project.')
     parser.add_argument('--img-size', default=640, type=int,
                         help='Image size (default: 640).')
     parser.add_argument('--num-classes', default=12, type=int,
                         help='Number of classes in dataset including background.')
-    parser.add_argument('--backbone', default='resnet50',
+    parser.add_argument('--backbone', default='resnet50', type=str,
                         help='Backbone CNN for Faster R-CNN (default: resnet50).')
     parser.add_argument('--batch-size', default=16, type=int,
                         help='Batch size (default: 16).')
-    parser.add_argument('--lr-scheduler', default="multisteplr",
+    parser.add_argument('--lr-scheduler', default="multisteplr", type=str,
                         help='the lr scheduler (default: multisteplr).')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='Number of total epochs to run (default: 100).')
@@ -55,9 +57,9 @@ if __name__ == "__main__":
                         help='Decrease lr by a factor of lr-gamma.')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--cache', default=True, action='store_true',
+    parser.add_argument('--cache', default=True, action='store_true', type=bool,
                         help='Cache the images found in the dataset (default: True).')
-    parser.add_argument('--pretrained', default=True,
+    parser.add_argument('--pretrained', default=True, type=bool,
                         help='Use pre-trained models (default: true).', action="store_true")
     parser.add_argument(
         '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
@@ -69,13 +71,13 @@ if __name__ == "__main__":
                         type=int, help='Start epoch.')
     parser.add_argument('--conf-threshold', default=0.5,
                         type=float, help='Prediction score threshold.')
-    parser.add_argument('--trainable-layers', default=4,
+    parser.add_argument('--trainable-layers', default=3,
                         type=int, help='Number of CNN backbone layers to train (min: 0, max: 5, default: 3).')
-    parser.add_argument('--no-visual', default=True, action='store_true',
+    parser.add_argument('--no-visual', default=True, action='store_true', type=bool,
                         help='Disable visualization software in test mode.')
-    parser.add_argument('--no-save', default=False, action='store_true',
+    parser.add_argument('--no-save', default=False, action='store_true', type=bool,
                         help='Disable results export software.')
-    parser.add_argument('--no-threading-linux', default=True, action='store_true',
+    parser.add_argument('--no-threading-linux', default=True, action='store_true', type=bool,
                         help='Disable multithreading library in Linux due to possible race conditions.')
     args = parser.parse_args()
 
@@ -101,6 +103,7 @@ if __name__ == "__main__":
     
     # check platform and reconfigure number of workers
     if platform.system() == "Linux" and args.no_threading_linux:
+        # RuntimeError: received 0 items of ancdata
         args.num_workers = 1
         print(f"WARNING:"
             f"\n\tOS family is Linux."
