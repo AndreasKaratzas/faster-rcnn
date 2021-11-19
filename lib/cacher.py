@@ -206,7 +206,7 @@ class CustomCachedDetectionDataset(Dataset):
                 # fetch if it does not exist
                 img_path = self.img_files[image_idx]
                 # load image sample
-                img = Image.open(image_idx).convert("RGB")
+                img = Image.open(img_path).convert("RGB")
                 # reduce image dimensions
                 img = self.reduce_image(img=img)
                 # assert error if image was not found
