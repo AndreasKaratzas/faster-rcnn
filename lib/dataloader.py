@@ -14,7 +14,6 @@ IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
                'dng', 'webp', 'mpo']  # acceptable image suffixes
 
 class CustomDetectionDataset(Dataset):
-    # TODO https://github.com/szymonmaszke/torchdata
     def __init__(self, root_dir, transforms=None):
         self.root_dir = root_dir
         self.transforms = transforms
@@ -36,7 +35,7 @@ class CustomDetectionDataset(Dataset):
             boxes = boxes.unsqueeze(0)
 
         if self.transforms is not None:
-            img, boxes = self.transforms(np.array(img), boxes)
+            img, boxes = self.transforms(img, boxes)
         
         boxes = torch.as_tensor(boxes[:, 1:], dtype=torch.float32)
 
@@ -69,18 +68,16 @@ class TestDataset(Dataset):
         self.transforms = transforms
         self.images = list(
             sorted(os.listdir(os.path.join(root_dir, "images"))))
-            
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.root_dir, "images", self.images[idx])
 
-        image = cv2.imread(img_path)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        img = Image.open(img_path).convert("RGB")
 
         if self.transforms is not None:
-            image = self.transforms(image=image)
+            img = self.transforms(img=img)
 
-        return image
+        return img
 
     def __len__(self):
         return len(self.images)

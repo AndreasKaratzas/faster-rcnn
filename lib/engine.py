@@ -4,10 +4,12 @@ import math
 import time
 import torch
 import numpy as np
+from torch.utils import data
 import torchvision
 
 from tqdm import tqdm
 from random import random
+from statistics import mean
 
 from coco.coco_utils import get_coco_api_from_dataset
 from lib.utils import reduce_dict, warmup_lr_scheduler
@@ -38,8 +40,11 @@ def train(
     epoch: int, 
     log_filepath: str,
     confirm: bool = False,
-    sample: float = 0.10,
-    num_classes: int = 12
+    sample: float = 1.00,
+    num_classes: int = 12,
+    no_visual: bool = True, 
+    no_save: bool = False,
+    res_dir: str = ''
 ):
     model.train()
     metric_logger = MetricLogger(f_path=log_filepath, delimiter="  ")
@@ -52,20 +57,28 @@ def train(
 
         lr_scheduler = warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
 
-    # test dataloader
+    # training dataloader
     if confirm:
         if sample > 1.0 or sample < 0.0:
             raise ValueError(f"Option `sample` was not between [0, 1]. Input value was {sample}.")
-
-        visualize = VisualTest(num_classes=num_classes)
+        visualize = VisualTest(num_classes=num_classes, res_dir=res_dir)
         for images, targets in dataloader:
             if random() < sample:
                 for image, target in zip(images, targets):
+
                     if target['boxes'].ndim < 1:
                         target['boxes'] = target['boxes'].unsqueeze(0)
                     
                     visualize.visualize(
-                        img=image * 255, boxes=target['boxes'], labels=target['labels'])
+                        img=image * 255, boxes=target['boxes'], labels=target['labels'], 
+                        no_visual=no_visual, no_save=no_save)
+    
+    # Define loss accumulators for statistics
+    loss_acc = []
+    loss_classifier_acc = []
+    loss_box_reg_acc = []
+    loss_objectness_acc = []
+    loss_rpn_box_reg_acc = []
 
     print(f"\t{'Epoch':10}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
     with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
@@ -100,10 +113,18 @@ def train(
             
             lr, loss, loss_classifier, loss_box_reg, loss_objectness, loss_rpn_box_reg = metric_logger.get_metrics()
             
+            loss_acc.append(loss)
+            loss_classifier_acc.append(loss_classifier)
+            loss_box_reg_acc.append(loss_box_reg)
+            loss_objectness_acc.append(loss_objectness)
+            loss_rpn_box_reg_acc.append(loss_rpn_box_reg)
+ 
             pbar.set_description(('%13s' + '%12s' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' * 3) % (
                 f'{epoch + 1}/{epochs}', 
                 f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G',
-                lr, loss, loss_classifier, loss_box_reg, loss_objectness, loss_rpn_box_reg))
+                lr, round(mean(loss_acc), 3), round(mean(loss_classifier_acc), 3), 
+                round(mean(loss_box_reg_acc), 3), round(mean(loss_objectness_acc), 3), 
+                round(mean(loss_rpn_box_reg_acc), 3)))
             
             pbar.update(1)
         
@@ -123,10 +144,21 @@ def validate(
     torch.set_num_threads(1)
     cpu_device = torch.device("cpu")
     model.eval()
+
+    # visualize = VisualTest(num_classes=12, res_dir='./data/results')
+    # for images, targets in dataloader:
+    #     for image, target in zip(images, targets):
+
+    #         if target['boxes'].ndim < 1:
+    #             target['boxes'] = target['boxes'].unsqueeze(0)
+            
+    #         visualize.visualize(
+    #             img=image * 255, boxes=target['boxes'], labels=target['labels'], 
+    #             no_visual=True, no_save=False)
     
     coco = get_coco_api_from_dataset(dataloader.dataset)
     iou_types = _get_iou_types(model)
-    coco_evaluator = CocoEvaluator(coco, iou_types, log_filepath, epoch)
+    coco_evaluator = CocoEvaluator(coco, iou_types, log_filepath, epoch + 1)
 
     pbar = tqdm(dataloader, desc=f"{'               mAP@.5:.95':29}"
                                  f"{'mAP@.5':11}{'mAP@.75':11}"
@@ -135,7 +167,7 @@ def validate(
                 bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}')
     for images, targets in pbar:
         images = list(image.to(device) for image in images)
-        
+
         if torch.cuda.is_available():
             torch.cuda.synchronize()       
         model_time = time.time()

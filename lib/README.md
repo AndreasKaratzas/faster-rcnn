@@ -3,7 +3,8 @@
 * Add docstrings
 * https://github.com/uploadcare/pillow-simd
 * Tensorboard
-* Caching using https://github.com/ultralytics/yolov5/blob/540ef0dd30be9bcf6882c9625c49f61c5c764f52/utils/datasets.py#L377
 * WANDB
 * Colors in messages
 * Train, test split script
+* Bug in validation and test datasets or transformations
+* Filter anchor dataset outliers better (foreach point draw a circle with radius linearly dependent with the sample population and purge if no neighbor is within its area) 

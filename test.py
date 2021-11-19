@@ -30,10 +30,8 @@ if __name__ == '__main__':
                         help='Image size (default: 1280).')
     parser.add_argument('--num-workers', default=8, type=int, metavar='N',
                         help='Number of data loading workers (default: 8).')
-    parser.add_argument('--conf-threshold', default=0.50, type=float,
+    parser.add_argument('--conf-threshold', default=0.1, type=float,
                         help='Confidence threshold in prediction (default: 0.5).')
-    parser.add_argument('--visualize', default=0.50, type=float,
-                        help='Visualize a percentage of predictions (default: 0.5).')
     parser.add_argument('--no-visual', default=True, action='store_true',
                         help='Disable visualization software in test mode.')
     parser.add_argument('--no-save', default=False, action='store_true',
@@ -51,7 +49,7 @@ if __name__ == '__main__':
     if not args.no_save:
         datetime_tag = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
         test_results_dir = Path(args.model_checkpoint).parent.absolute(
-        ).parent.absolute() / Path(args.output + '_' + datetime_tag)
+        ).parent.absolute() / Path(args.output) / datetime_tag
         test_results_dir.mkdir(parents=True, exist_ok=True)
 
     # initialize the computation device
@@ -68,6 +66,10 @@ if __name__ == '__main__':
 
         args.num_classes = data['dataset']['classes']
         args.img_size = data['dataset']['img_size']
+
+        # Typecast list of `str` to list of `float`
+        args.anchor_sizes = [float(anchor) for anchor in args.anchor_sizes]
+        args.aspect_ratios = [float(ratio) for ratio in args.aspect_ratios]
 
     # model init
     model = configure_model(

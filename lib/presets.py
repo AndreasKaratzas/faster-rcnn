@@ -1,14 +1,75 @@
 
+# TODO embed jit for faster transformations
+
 import cv2
+import torch
+import torchvision
 import numpy as np
 import albumentations as A
+import lib.transforms as T
 
 from albumentations.pytorch import ToTensorV2
 
 
-class DetectionPresetTrain:
-    """
+class DetectionPresetTrainTorchVision:
+    def __init__(self, img_size: int = 640,  hflip_prob: float = 0.5):
+
+        self.transform = T.Compose([
+            T.Resize(img_size=img_size),
+            T.RandomPhotometricDistort(),
+            T.RandomHorizontalFlip(p=hflip_prob),
+            T.PILToTensor(),
+            T.ConvertImageDtype(torch.float),
+        ])
     
+    def __call__(self, img, target):
+        return self.transform(img, target)
+    
+
+class DetectionPresetEvalTorchVision:
+    def __init__(self, img_size: int = 640):
+
+        self.transform = T.Compose([
+            T.Resize(img_size=img_size),
+            T.PILToTensor(),
+            T.ConvertImageDtype(torch.float),
+        ])
+
+    def __call__(self, img, target):
+        return self.transform(img, target)
+
+
+class DetectionPresetTestTorchVision:
+    def __init__(self, img_size: int = 640):
+
+        self.transform = torchvision.transforms.Compose([
+            T.ResizeImage(img_size=img_size),
+            torchvision.transforms.PILToTensor(),
+            torchvision.transforms.ConvertImageDtype(torch.float),
+        ])
+
+    def __call__(self, img):
+        return self.transform(img)
+
+
+class DetectionPresetImageOnlyTorchVision:
+    def __init__(self, img_size: int = 640):
+        self.transform = T.ResizeImage(img_size=img_size)
+
+    def __call__(self, img):
+        return self.transform(img)
+
+
+class DetectionPresetTargetOnlyTorchVision:
+    def __init__(self, img_size: int = 640):
+        self.transform = T.ResizeTarget(img_size=img_size)
+
+    def __call__(self, target, height: int, width: int):
+        return self.transform(target=target, height=height, width=width)
+
+
+class DetectionPresetTrainAlbumentations:
+    """
     https://albumentations.ai/docs/examples/pytorch_classification/
 
     https://github.com/ultralytics/yolov5/blob/b8f979bafab6db020d86779b4b40619cd4d77d57/utils/augmentations.py#L25
@@ -40,7 +101,7 @@ class DetectionPresetTrain:
         return img, labels
 
 
-class DetectionPresetEval:
+class DetectionPresetEvalAlbumentations:
     def __init__(self, img_size: int = 640):
         
         self.transforms = A.Compose([
@@ -58,7 +119,8 @@ class DetectionPresetEval:
             [[c, *b] for c, b in zip(res_augmented['class_labels'], res_augmented['bboxes'])])
         return img, labels
 
-class DetectionPresetTest:
+
+class DetectionPresetTestAlbumentations:
     def __init__(self, img_size: int = 640):
 
         self.transforms = A.Compose([
@@ -72,7 +134,8 @@ class DetectionPresetTest:
     def __call__(self, image):
         return self.transforms(image=image)["image"]
 
-class DetectionPresetImageOnly:
+
+class ScaleImage:
     def __init__(self, img_size: int = 640):
         
         self.transforms = A.Compose([
@@ -85,7 +148,7 @@ class DetectionPresetImageOnly:
         return self.transforms(image=image)["image"]
 
 
-class DetectionPresetTargetOnly:
+class ScaleTarget:
     def __init__(self, img_size: int = 640):
 
         self.transforms = A.Compose([
@@ -94,6 +157,9 @@ class DetectionPresetTargetOnly:
                           value=0, border_mode=cv2.BORDER_CONSTANT)
         ], bbox_params=A.BboxParams(format='pascal_voc', label_fields=['class_labels']))
 
-    def __call__(self, bboxes):
-        return self.transforms(bboxes=bboxes)["bboxes"]
-
+    def __call__(self, labels, height: int, width: int):
+        zero_img = np.zeros(shape=(height, width, 3), dtype=np.uint8)
+        res_augmented = self.transforms(
+            image=zero_img, bboxes=labels[:, 1:], class_labels=labels[:, 0])
+        labels = np.array([[c, *b] for c, b in zip(res_augmented['class_labels'], res_augmented['bboxes'])])
+        return labels

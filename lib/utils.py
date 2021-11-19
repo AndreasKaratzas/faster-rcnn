@@ -6,16 +6,16 @@ import torch.distributed as dist
 
 from typing import List, Tuple
 
-from lib.presets import  DetectionPresetTrain, DetectionPresetEval, DetectionPresetTest
+from lib.presets import DetectionPresetTrainTorchVision, DetectionPresetEvalTorchVision, DetectionPresetTestTorchVision
 
 
-def get_transform(transform_class, img_size: int = 640):
+def get_transform(transform_class: str, img_size: int = 640):
     if transform_class == "train":
-        return DetectionPresetTrain(img_size=img_size)
+        return DetectionPresetTrainTorchVision(img_size=img_size)
     elif transform_class == "valid":
-        return DetectionPresetEval(img_size=img_size)
+        return DetectionPresetEvalTorchVision(img_size=img_size)
     elif transform_class == "test":
-        return DetectionPresetTest(img_size=img_size)
+        return DetectionPresetTestTorchVision(img_size=img_size)
     else:
         raise ValueError(
             f"Transformation preference was invalid. Value parsed was {transform_class}\n")

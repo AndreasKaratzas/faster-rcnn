@@ -16,7 +16,7 @@ class Visual():
     def __init__(self, model: torch.nn.Module, root_dir: str, device: torch.device, conf_threshold: float, num_classes: int = 12):
         super().__init__()
 
-        matplotlib.style.use('ggplot')
+        matplotlib.use('TkAgg')
         plt.rcParams["savefig.bbox"] = 'tight'
 
         self.model = model
@@ -44,8 +44,9 @@ class Visual():
             axs[0, i].imshow(np.asarray(img))
             axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 
-        plt.tight_layout()
         plt.show()
+        plt.clf()
+        plt.close()
     
     def export(self, img_set, file_idx: int):
         if not isinstance(img_set, list):
@@ -59,8 +60,9 @@ class Visual():
             axs[0, i].imshow(np.asarray(img))
             axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 
-        plt.tight_layout()
         plt.savefig(self.results_dir / Path('batch_' + str(file_idx) + '.png'), dpi=400)
+        plt.clf()
+        plt.close()
 
     @torch.no_grad()
     def test_model(self, dataloader: torch.utils.data.DataLoader, results_dir: Path, no_visual: bool = True, no_save: bool = False, line_width: int = 3):
@@ -74,6 +76,8 @@ class Visual():
             
             # Feed input to model
             outputs = self.model(batch)
+
+            print(outputs)
             
             # Build image with predicted boxes
             vis_result = [
@@ -91,14 +95,16 @@ class Visual():
                 self.export(img_set=vis_result, file_idx=idx)
 
 class VisualTest():
-    # TODO fix this class for xyxy and not xywhn
-    def __init__(self, num_classes: int = 12):
+    def __init__(self, num_classes: int = 12, res_dir: str = './results'):
         super().__init__()
 
-        matplotlib.style.use('ggplot')
+        matplotlib.use('TkAgg')
         plt.rcParams["savefig.bbox"] = 'tight'
 
+        self.img_cntr = 0
         self.num_classes = num_classes
+        self.results_dir = res_dir
+
         self.colors = list(sorted(ImageColor.colormap.items()))[
             :self.num_classes]
     
@@ -121,30 +127,39 @@ class VisualTest():
             axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 
         plt.show()
-    
-    def rescale_boxes(self, img: torch.ByteTensor, boxes: torch.Tensor):
-        _, img_height, img_width = img.shape
+        plt.clf()
+        plt.close()
 
-        print(img_height, img_width)
-        print(boxes)
+    def export(self, img_set, file_idx: int):
+        if not isinstance(img_set, list):
+            img_set = [img_set]
 
-        boxes[:, 0] = boxes[:, 0] * img_width
-        boxes[:, 1] = boxes[:, 1] * img_height
-        boxes[:, 2] = boxes[:, 2] * img_width
-        boxes[:, 3] = boxes[:, 3] * img_height
+        fig, axs = plt.subplots(ncols=len(img_set), squeeze=False)
 
-        boxes[:, 0] = boxes[:, 0] - (boxes[:, 2] / 2)
-        boxes[:, 1] = boxes[:, 1] - (boxes[:, 3] / 2)
+        for i, img in enumerate(img_set):
+            img = img.detach()
+            img = F.to_pil_image(img)
+            axs[0, i].imshow(np.asarray(img))
+            axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
 
-        boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
-        boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
-        
-        boxes = torch.round(boxes)
-        
-        return boxes
+        plt.savefig(self.results_dir / Path('image_' +
+                    str(file_idx) + '.png'), dpi=400)
+        plt.clf()
+        plt.close()
 
-    def visualize(self, img: np.ndarray, boxes: torch.Tensor, labels: List[int]):
+    def visualize(self, img: np.ndarray, boxes: torch.Tensor, labels: List[int], no_visual: bool = True, no_save: bool = False):
         img = img.clone().detach().type(torch.ByteTensor)
+
         img_set = self.draw_bboxes(
-            img=img, boxes=self.rescale_boxes(img=img, boxes=boxes), labels=labels)
-        self.show(img_set=img_set)
+            img=img, boxes=boxes, labels=labels)
+
+        if not no_visual:
+            # Visualize result
+            self.show(img_set=img_set)
+        
+        if not no_save:
+            # check if `res_dir` exists
+            Path(self.results_dir).mkdir(parents=True, exist_ok=True)
+            # Export result
+            self.export(img_set=img_set, file_idx=self.img_cntr)
+            self.img_cntr += 1

@@ -2,7 +2,6 @@
 import argparse
 import datetime
 import json
-import math
 import os
 import warnings
 from pathlib import Path
@@ -12,7 +11,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 from lib.autoanchor import autoanchors
-from lib.dataloader import CustomDetectionDataset
+from lib.cacher import CustomCachedDetectionDataset
 from lib.elitism import EliteModel
 from lib.engine import train, validate
 from lib.model import configure_model
@@ -33,15 +32,15 @@ if __name__ == "__main__":
                         help='Image size (default: 640).')
     parser.add_argument('--num-classes', default=12, type=int,
                         help='Number of classes in dataset including background.')
-    parser.add_argument('--backbone', default='resnet50',
+    parser.add_argument('--backbone', default='resnet18',
                         help='Backbone CNN for Faster R-CNN (default: resnet50).')
-    parser.add_argument('--batch-size', default=16, type=int,
+    parser.add_argument('--batch-size', default=4, type=int,
                         help='Batch size (default: 16).')
     parser.add_argument('--lr-scheduler', default="multisteplr",
                         help='the lr scheduler (default: multisteplr).')
-    parser.add_argument('--epochs', default=100, type=int, metavar='N',
+    parser.add_argument('--epochs', default=20, type=int, metavar='N',
                         help='Number of total epochs to run (default: 100).')
-    parser.add_argument('--num-workers', default=8, type=int, metavar='N',
+    parser.add_argument('--num-workers', default=1, type=int, metavar='N',
                         help='Number of data loading workers (default: 8).')
     parser.add_argument('--lr', default=1e-3, type=float,
                         help='Initial learning rate (default: 1e-3).')
@@ -55,6 +54,8 @@ if __name__ == "__main__":
                         help='Decrease lr by a factor of lr-gamma.')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
+    parser.add_argument('--cache', default=False, action='store_true',
+                        help='Cache the images found in the dataset.')
     parser.add_argument('--pretrained', default=True,
                         help='Use pre-trained models (default: true).', action="store_true")
     parser.add_argument(
@@ -69,6 +70,10 @@ if __name__ == "__main__":
                         type=float, help='Prediction score threshold.')
     parser.add_argument('--trainable-layers', default=3,
                         type=int, help='Number of CNN backbone layers to train (min: 0, max: 5, default: 3).')
+    parser.add_argument('--no-visual', default=True, action='store_true',
+                        help='Disable visualization software in test mode.')
+    parser.add_argument('--no-save', default=False, action='store_true',
+                        help='Disable results export software.')
     args = parser.parse_args()
 
     # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
@@ -96,16 +101,32 @@ if __name__ == "__main__":
     print(f"Device utilized:\t[{device}]\n")
 
     # training dataset
-    train_data = CustomDetectionDataset(
+    # train_data = CustomDetectionDataset(
+    #     root_dir=os.path.join(args.dataset, "train"),
+    #     transforms=get_transform(
+    #         transform_class="train",
+    #         img_size=args.img_size)
+    # )
+
+    # training dataset
+    train_data = CustomCachedDetectionDataset(
         root_dir=os.path.join(args.dataset, "train"),
+        num_threads=args.num_workers,
+        batch_size=args.batch_size,
+        img_size=args.img_size,
+        cache_images_flag=args.cache,
         transforms=get_transform(
             transform_class="train",
             img_size=args.img_size)
     )
 
     # validation dataset
-    val_data = CustomDetectionDataset(
+    val_data = CustomCachedDetectionDataset(
         root_dir=os.path.join(args.dataset, "valid"),
+        num_threads=args.num_workers,
+        batch_size=args.batch_size,
+        img_size=args.img_size,
+        cache_images_flag=args.cache,
         transforms=get_transform(
             transform_class="valid",
             img_size=args.img_size
@@ -113,6 +134,7 @@ if __name__ == "__main__":
     )
 
     # training dataloader
+    # TODO https://github.com/pytorch/vision/blob/aedd39792d07af58e55ec028ed344d63debbd281/references/detection/train.py#L170
     dataloader_train = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
@@ -176,6 +198,8 @@ if __name__ == "__main__":
     log_save_dir.mkdir(parents=True, exist_ok=True)
     plots_save_dir = Path(args.root_dir) / datetime_tag / "plots"
     plots_save_dir.mkdir(parents=True, exist_ok=True)
+    gt_save_dir = Path(args.root_dir) / datetime_tag / "ground_truth"
+    gt_save_dir.mkdir(parents=True, exist_ok=True)
     config_save_dir = Path(args.root_dir) / datetime_tag / "CONFIG.json"
 
     with open(config_save_dir, "w") as f:
@@ -248,13 +272,14 @@ if __name__ == "__main__":
     for epoch in range(args.start_epoch, args.epochs):
 
         train_logger = train(model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-                             epoch=epoch, log_filepath=log_save_dir_train, num_classes=args.num_classes)
+                             epoch=epoch, log_filepath=log_save_dir_train, num_classes=args.num_classes,
+                             no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir)
         train_logger.export_data()
         validate(model=model, dataloader=dataloader_valid, device=device,
                  log_filepath=log_save_dir_validation, epoch=epoch)
 
         lr_scheduler.step()
-        elite_model_criterion.calculate_metrics(epoch=epoch)
+        elite_model_criterion.calculate_metrics(epoch=epoch + 1)
 
         if elite_model_criterion.evaluate_model():
             # save best model to disk

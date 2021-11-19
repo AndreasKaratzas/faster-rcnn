@@ -1,20 +1,19 @@
 
 import os
-import cv2
 import glob
 import torch
 import hashlib
 import numpy as np
 
 from tqdm import tqdm
+from typing import List
 from pathlib import Path
-from pprint import pprint
 from itertools import repeat
 from PIL import Image, ImageOps
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from multiprocessing.pool import Pool, ThreadPool
 
-from lib.presets import DetectionPresetImageOnly, DetectionPresetTargetOnly
+from lib.presets import DetectionPresetImageOnlyTorchVision, DetectionPresetTargetOnlyTorchVision
 
 
 IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
@@ -29,6 +28,8 @@ def _verify_lbl2img_path(args):
         img = Image.open(img_file)
         # verify integrity
         img.verify()
+        # register image dimensions
+        width, height = img.size
         # check file extension
         assert img.format.lower(
         ) in IMG_FORMATS, f'invalid image format {img.format}'
@@ -46,12 +47,15 @@ def _verify_lbl2img_path(args):
         if os.path.isfile(lbl_file):
             # load labels
             lbl = np.loadtxt(lbl_file, delimiter=" ")
+            # convert to torch tensor
+            lbl = torch.as_tensor(lbl, dtype=torch.float32)
+            # unsqueeze labels in case of single object
+            if lbl.ndim == 1:
+                lbl = lbl.unsqueeze(0)
+            # get number of labels
             num_lbls = len(lbl)
             # check for empty labels file
-            if not lbl:
-                raise ValueError(
-                    f"Found empty label file. ID {lbl_file.stem}.")
-            else:
+            if lbl is not None:
                 # check label file structure
                 assert lbl.shape[1] == 5, f'Labels require 5 columns, {lbl.shape[1]} columns detected'
                 # check for duplicate labels
@@ -61,12 +65,16 @@ def _verify_lbl2img_path(args):
                     # filter out duplicates
                     lbl = lbl[dupl_idx_ndarray]
                     msg += f'WARNING: {img_file}: {num_lbls - len(dupl_idx_ndarray)} duplicate labels removed.\n'
+            else:
+                raise ValueError(
+                    f"Found empty label file. ID {Path(lbl_file).stem}.")
         # label file was not found
         else:
             raise ValueError(f"Missing label file for image {img_file}.")
-        return img_file, lbl, msg
+        return img_file, lbl, width, height, msg
     except Exception as e:
-        raise AttributeError(f"Image and/or label file is corrupt regarding sample with ID {img_file.stem}.")
+        raise AttributeError(
+            f"Image and/or label file is corrupt regarding sample with ID {Path(img_file).stem}.")
 
 
 def _load_image(self, img_idx: int):
@@ -77,36 +85,38 @@ def _load_image(self, img_idx: int):
     img_idx : int
         [description]
     """
-    img = self.images[img_idx]
-    # check if img exists in cache
-    if img is None:
+    try:
+        img = self.images[img_idx]
+        # check if img exists in cache
+        return self.images[img_idx]
+    except:
         # fetch if it does not exist
         img_path = self.img_files[img_idx]
         # load image sample
-        img = cv2.imread(img_path)
-        # transpose BGR to RGB
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = Image.open(img_path).convert("RGB")
         # reduce image dimensions
-        img = self.reduce_image(image=img)
+        img = self.reduce_image(img=img)
         # assert error if image was not found
         assert img is not None, f'Image Not Found {img_path}'
         # return result
         return img
-    else:
-        return self.images[img_idx]
 
-class CustomDetectionDataset(Dataset):
-    def __init__(self, root_dir, num_threads: int = 8, batch_size: int = 16, img_size: int = 640, transforms=None):
+
+class CustomCachedDetectionDataset(Dataset):
+    def __init__(self, root_dir, num_threads: int = 8, batch_size: int = 16, img_size: int = 640, transforms=None, cache_images_flag: bool = True):
         self.root_dir = root_dir
         self.transforms = transforms
         self.num_threads = num_threads
         self.batch_size = batch_size
         self.img_size = img_size
-        self.reduce_image = DetectionPresetImageOnly(img_size=self.img_size)
-        self.reduce_target = DetectionPresetTargetOnly(img_size=self.img_size)
+        self.cache_images_flag = cache_images_flag
+        self.reduce_image = DetectionPresetImageOnlyTorchVision(
+            img_size=self.img_size)
+        self.reduce_target = DetectionPresetTargetOnlyTorchVision(
+            img_size=self.img_size)
         
         self._fetch_img_files(root_dir=root_dir)
-        self._fetch_lbl_files()
+        self._fetch_lbl_files(img_files=self.img_files)
 
         cache_path = Path(root_dir).with_suffix('.cache')
         self._config_cache(cache_path=cache_path)
@@ -115,9 +125,9 @@ class CustomDetectionDataset(Dataset):
         f = glob.glob(str(Path(root_dir) / '**' / '*.*'), recursive=True)
         self.img_files = sorted(x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in IMG_FORMATS)
 
-    def _fetch_lbl_files(self):
+    def _fetch_lbl_files(self, img_files: List[Path]):
         sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep
-        self.lbl_files = [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[0] + '.txt' for x in self.img_files]
+        self.lbl_files = [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[0] + '.txt' for x in img_files]
 
     def _get_hash(self):
         paths = self.img_files + self.lbl_files
@@ -132,10 +142,13 @@ class CustomDetectionDataset(Dataset):
         desc = f"Scanning '{cache_path.parent.name}' directory for images and labels"
         with Pool(self.num_threads) as pool:
             pbar = tqdm(pool.imap(_verify_lbl2img_path, zip(
-                self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files))
-            for img_file, lbl, msg in pbar:
+                self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files), unit=" samples processed")
+            # verify target files w.r.t. images found in the dataset
+            for img_file, lbl, width, height, msg in pbar:
                 # reduce target dimensions w.r.t. image dimensionality reduction ratio
-                lbl = self.reduce_target(bboxes=lbl)
+                lbl = self.reduce_target(
+                    target=lbl, height=height, width=width)
+                # record targets or message indicating a failure in the parsing process
                 if img_file:
                     x[img_file] = lbl
                 if msg:
@@ -144,21 +157,9 @@ class CustomDetectionDataset(Dataset):
 
         # print warnings
         if msgs:
-            pprint(msgs)
-        
-        # include hash key
-        x["hash"] = self._get_hash()
-        # include messages
-        x["msgs"] = msgs
+            print(f"{' '.join(msgs)}")
 
-        # store cache
-        try:
-            np.save(cache_path, x)
-            cache_path.with_suffix('.cache.npy').rename(cache_path)
-            print(f"Created new cache at path: {cache_path}")
-            return x
-        except Exception as e:
-            raise ValueError(f"Cache directory not writeable: {e}")
+        return x
 
     def _cache_images(self):
         # declare cache variable for images
@@ -169,38 +170,23 @@ class CustomDetectionDataset(Dataset):
         _results = ThreadPool(self.num_threads).imap(
             lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
         # keep user informed with a TQDM bar
-        pbar = tqdm(enumerate(_results), total=self.num_samples)
+        pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
         # loop through samples
         for image_idx, image_sample in pbar:
             # cache image
             self.images[image_idx] = image_sample
             # update allocated memory register
-            _allocated_mem += self.images[image_idx].nbytes
+            _allocated_mem += np.asarray(self.images[image_idx]).nbytes
             # update RAM status
             pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
         pbar.close()
 
     def _config_cache(self, cache_path: Path):
-        # cache exists
-        try:
-            # load cache
-            cache, exists = np.load(cache_path, allow_pickle=True).item(), True
-            assert cache["hash"] == self._get_hash()
-        # cache does not exist
-        except:
-            # create cache
-            cache, exists = self._cache_labels(cache_path), False
+        # create cache
+        cache = self._cache_labels(cache_path)
         
-        # check past version cache integrity
-        if exists:
-            if cache["msgs"]:
-                pprint(cache["msgs"])
-        
-        # clear cache from unnecessary attributes
-        [cache.pop(k) for k in ("hash", "msgs")]
-
-        # extract labels (np.ndarray)
-        self.labels = zip(*cache.values())
+        # extract labels (List[np.ndarray])
+        self.labels = list(cache.values())
 
         # update images' paths
         self.img_files = list(cache.keys())
@@ -214,23 +200,18 @@ class CustomDetectionDataset(Dataset):
         self.sample_idxs = range(self.num_samples)
 
         # cache images
-        self._cache_images()
+        if self.cache_images_flag:
+            self._cache_images()
 
     def __getitem__(self, idx):
         img = _load_image(self, idx)
         
-        boxes = self.labels[idx].copy()
-        boxes = torch.as_tensor(boxes, dtype=torch.float32)
-
-        if boxes.ndim == 1:
-            boxes = boxes.unsqueeze(0)
-
-        if self.transforms is not None:
-            img, boxes = self.transforms(img, boxes)
-
+        boxes = self.labels[idx]
+        boxes = torch.as_tensor(boxes, dtype=torch.float64)
+        
         labels = torch.as_tensor(boxes[:, 0], dtype=torch.int64)
-        boxes = torch.as_tensor(boxes[:, 1:], dtype=torch.float32)
-
+        boxes = torch.as_tensor(boxes[:, 1:], dtype=torch.float64)
+        
         if labels.ndim < 1:
             labels = labels.unsqueeze(0)
 
@@ -245,12 +226,10 @@ class CustomDetectionDataset(Dataset):
         target["area"] = area
         target["iscrowd"] = iscrowd
 
+        if self.transforms is not None:
+            img, target = self.transforms(img, target)
+
         return img, target
 
     def __len__(self):
-        return len(self.images)
-    
-    @staticmethod
-    def collate_fn_embedded(batch):
-        img, label = zip(*batch)
-        return torch.stack(img, 0), torch.cat(label, 0)
+        return self.num_samples
