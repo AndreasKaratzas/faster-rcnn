@@ -141,7 +141,7 @@ class CustomCachedDetectionDataset(Dataset):
 
         desc = f"Scanning '{cache_path.parent.name}' directory for images and labels"
         with Pool(self.num_threads) as pool:
-            pbar = tqdm(pool.imap(_verify_lbl2img_path, zip(
+            pbar = tqdm(pool.map(_verify_lbl2img_path, zip(
                 self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files), unit=" samples processed")
             # verify target files w.r.t. images found in the dataset
             for img_file, lbl, width, height, msg in pbar:
@@ -167,7 +167,7 @@ class CustomCachedDetectionDataset(Dataset):
         # register memory allocated in RAM
         _allocated_mem = 0
         # initialize multithreaded image fetching operation
-        _results = ThreadPool(self.num_threads).imap(
+        _results = ThreadPool(self.num_threads).map(
             lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
         # keep user informed with a TQDM bar
         pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
