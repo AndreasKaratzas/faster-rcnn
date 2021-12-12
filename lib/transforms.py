@@ -6,7 +6,7 @@ import warnings
 
 import torch
 import torchvision
-from torch import nn, Tensor
+from torch import nn, jit, Tensor
 from torchvision.transforms import functional as F
 from torchvision.transforms import transforms as T
 
@@ -21,7 +21,7 @@ class Compose:
         return image, target
 
 
-class ResizeTarget(nn.Module):
+class ResizeTarget(jit.ScriptModule):
     def __init__(
         self, img_size: int = 640
     ):
@@ -34,6 +34,7 @@ class ResizeTarget(nn.Module):
                 "If size is a sequence, it should have 1 or 2 values")
         self.img_size = img_size
 
+    @jit.script_method
     def forward(
         self, target: Dict[str, Tensor] = None, height: int = 640, width: int = 640
     ) -> Dict[str, Tensor]:
@@ -49,7 +50,7 @@ class ResizeTarget(nn.Module):
         return target
 
 
-class ResizeImage(nn.Module):
+class ResizeImage(jit.ScriptModule):
     def __init__(
         self, img_size: int = 640, interpolation=F.InterpolationMode.BILINEAR, max_size=None, antialias=None
     ):
@@ -74,6 +75,7 @@ class ResizeImage(nn.Module):
         self.interpolation = interpolation
         self.antialias = antialias
 
+    @jit.script_method
     def forward(
         self, image: Tensor
     ) -> Tensor:
@@ -95,7 +97,7 @@ class ResizeImage(nn.Module):
             self.img_size, interpolate_str, self.max_size, self.antialias)
 
 
-class Resize(nn.Module):
+class Resize(jit.ScriptModule):
     def __init__(
         self, img_size: int = 640, interpolation=F.InterpolationMode.BILINEAR, max_size=None, antialias=None
     ):
@@ -120,6 +122,7 @@ class Resize(nn.Module):
         self.interpolation = interpolation
         self.antialias = antialias
 
+    @jit.script_method
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
@@ -166,7 +169,8 @@ class RandomHorizontalFlip(T.RandomHorizontalFlip):
         return image, target
 
 
-class ToTensor(nn.Module):
+class ToTensor(jit.ScriptModule):
+    @jit.script_method
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
@@ -175,7 +179,8 @@ class ToTensor(nn.Module):
         return image, target
 
 
-class PILToTensor(nn.Module):
+class PILToTensor(jit.ScriptModule):
+    @jit.script_method
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
@@ -183,11 +188,12 @@ class PILToTensor(nn.Module):
         return image, target
 
 
-class ConvertImageDtype(nn.Module):
+class ConvertImageDtype(jit.ScriptModule):
     def __init__(self, dtype: torch.dtype) -> None:
         super().__init__()
         self.dtype = dtype
 
+    @jit.script_method
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
@@ -195,7 +201,7 @@ class ConvertImageDtype(nn.Module):
         return image, target
 
 
-class RandomIoUCrop(nn.Module):
+class RandomIoUCrop(jit.ScriptModule):
     def __init__(
         self,
         min_scale: float = 0.3,
@@ -216,6 +222,7 @@ class RandomIoUCrop(nn.Module):
         self.options = sampler_options
         self.trials = trials
 
+    @jit.script_method
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
@@ -286,7 +293,7 @@ class RandomIoUCrop(nn.Module):
                 return image, target
 
 
-class RandomZoomOut(nn.Module):
+class RandomZoomOut(jit.ScriptModule):
     def __init__(
         self, fill: Optional[List[float]] = None, side_range: Tuple[float, float] = (1.0, 4.0), p: float = 0.5
     ):
@@ -306,6 +313,7 @@ class RandomZoomOut(nn.Module):
         # We fake the type to make it work on JIT
         return tuple(int(x) for x in self.fill) if is_pil else 0
 
+    @jit.script_method
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
@@ -352,7 +360,7 @@ class RandomZoomOut(nn.Module):
         return image, target
 
 
-class RandomPhotometricDistort(nn.Module):
+class RandomPhotometricDistort(jit.ScriptModule):
     def __init__(
         self,
         contrast: Tuple[float] = (0.5, 1.5),
@@ -368,6 +376,7 @@ class RandomPhotometricDistort(nn.Module):
         self._saturation = T.ColorJitter(saturation=saturation)
         self.p = p
 
+    @jit.script_method
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:

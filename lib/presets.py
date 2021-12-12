@@ -1,6 +1,4 @@
 
-# TODO embed jit for faster transformations
-
 import cv2
 import torch
 import torchvision

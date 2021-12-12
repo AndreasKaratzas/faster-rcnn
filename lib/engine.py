@@ -38,29 +38,26 @@ def train(
     epochs: int,
     epoch: int, 
     log_filepath: str,
-    confirm: bool = False,
-    sample: float = 1.00,
+    writer: object,
+    confirm: bool = True,
+    sample: float = 0.1,
     num_classes: int = 12,
     no_visual: bool = True, 
-    no_save: bool = False,
+    no_save: bool = True,
     res_dir: str = ''
 ):
     model.train()
     metric_logger = MetricLogger(f_path=log_filepath, delimiter="  ")
     metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
 
-    lr_scheduler = None
-    if epoch == 0:
-        warmup_factor = 1. / 1000
-        warmup_iters = min(1000, len(dataloader) - 1)
-
-        lr_scheduler = warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor)
-
     # training dataloader
-    if confirm:
+    if confirm and epoch==0:
         if sample > 1.0 or sample < 0.0:
             raise ValueError(f"Option `sample` was not between [0, 1]. Input value was {sample}.")
         visualize = VisualTest(num_classes=num_classes, res_dir=res_dir)
+        
+        sample_num = 0
+        grid = []
         for images, targets in dataloader:
             if random() < sample:
                 for image, target in zip(images, targets):
@@ -68,9 +65,17 @@ def train(
                     if target['boxes'].ndim < 1:
                         target['boxes'] = target['boxes'].unsqueeze(0)
                     
-                    visualize.visualize(
+                    sample_image = visualize.visualize(
                         img=image * 255, boxes=target['boxes'], labels=target['labels'], 
                         no_visual=no_visual, no_save=no_save)
+
+                    grid.append(sample_image)
+
+                    if len(grid) == 4:
+                        grid = torchvision.utils.make_grid(grid)
+                        writer.add_image('batch_' + str(sample_num), grid, 0)
+                        sample_num += 1
+                        grid = []
     
     # Define loss accumulators for statistics
     loss_acc = []
@@ -103,9 +108,6 @@ def train(
             optimizer.zero_grad()
             losses.backward()
             optimizer.step()
-
-            if lr_scheduler is not None:
-                lr_scheduler.step()
             
             metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
@@ -129,7 +131,14 @@ def train(
         
         pbar.close()
 
-    return metric_logger
+    return \
+        metric_logger, lr, \
+        mean(loss_acc), \
+        mean(loss_classifier_acc), \
+        mean(loss_box_reg_acc), \
+        mean(loss_objectness_acc), \
+        mean(loss_rpn_box_reg_acc)
+
 
 @torch.no_grad()
 def validate(
@@ -144,7 +153,6 @@ def validate(
     cpu_device = torch.device("cpu")
     model.eval()
     
-    # TODO https://stackoverflow.com/questions/8391411/how-to-block-calls-to-print
     blockPrint()
     coco = get_coco_api_from_dataset(dataloader.dataset)
     iou_types = _get_iou_types(model)
@@ -183,3 +191,15 @@ def validate(
         coco_evaluator.stats[0], coco_evaluator.stats[1], coco_evaluator.stats[2], coco_evaluator.stats[3],
         coco_evaluator.stats[4], coco_evaluator.stats[5], np.mean(coco_evaluator.stats[6:])))
     torch.set_num_threads(n_threads)
+
+    val_metrics = {
+        "mAP@.5:.95": coco_evaluator.stats[0],
+        "mAP@.5": coco_evaluator.stats[1],
+        "mAP@.75": coco_evaluator.stats[2],
+        "mAP@s": coco_evaluator.stats[3],
+        "mAP@m": coco_evaluator.stats[4],
+        "mAP@l": coco_evaluator.stats[5],
+        "Recall": np.mean(coco_evaluator.stats[6:])
+    }
+
+    return val_metrics

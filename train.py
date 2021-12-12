@@ -2,22 +2,26 @@
 import argparse
 import datetime
 import json
+import copy
 import os
 import warnings
 import platform
 from pathlib import Path
-
+from pprint import pprint
 import torch
+from torch import onnx
 import torch.optim as optim
 from torch.utils.data import DataLoader
+from torch.profiler import ProfilerActivity
 
+from torch.utils.tensorboard import SummaryWriter
 from lib.autoanchor import autoanchors
 from lib.cacher import CustomCachedDetectionDataset
 from lib.elitism import EliteModel
 from lib.engine import train, validate
 from lib.model import configure_model
 from lib.plots import experiment_data_plots
-from lib.utils import collate_fn, get_transform
+from lib.utils import collate_fn, get_transform, weight_histograms, TraceWrapper
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -39,26 +43,29 @@ if __name__ == "__main__":
                         help='Backbone CNN for Faster R-CNN (default: resnet50).')
     parser.add_argument('--batch-size', default=16, type=int,
                         help='Batch size (default: 16).')
-    parser.add_argument('--lr-scheduler', default="multisteplr", type=str,
-                        help='the lr scheduler (default: multisteplr).')
     parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='Number of total epochs to run (default: 100).')
     parser.add_argument('--num-workers', default=8, type=int, metavar='N',
                         help='Number of data loading workers (default: 8).')
-    parser.add_argument('--lr', default=1e-3, type=float,
-                        help='Initial learning rate (default: 1e-3).')
+    parser.add_argument('--lr', default=5e-3, type=float,
+                        help='Initial learning rate (default: 5e-3).')
     parser.add_argument('--momentum', default=0.9,
                         type=float, metavar='M', help='Momentum.')
     parser.add_argument('--weight-decay', default=1e-4, type=float,
                         metavar='W', help='weight decay (default: 1e-4).')
-    parser.add_argument('--lr-steps', default=[16000, 22000], nargs='+',
-                        type=int, help='Decrease lr every step-size epochs.')
-    parser.add_argument('--lr-gamma', default=1e-2, type=float,
-                        help='Decrease lr by a factor of lr-gamma.')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--cache', default=True, action='store_true',
+    parser.add_argument('--cache', default=False, action='store_true',
                         help='Cache the images found in the dataset (default: True).')
+    parser.add_argument('--profiling', default=False, action='store_true',
+                        help='Profile the training loop (default: False).')
+    parser.add_argument('--prof-settings', default=[
+                        5, 5, 10, 3], nargs='+', type=int,
+                        help=f'Profiling settings. The order is:\n'
+                             f'1. wait (default: 5)\n'
+                             f'2. warmup (default: 5)\n'
+                             f'3. active (default: 10)\n'
+                             f'4. repeat (default: 3)')
     parser.add_argument('--pretrained', default=True,
                         help='Use pre-trained models (default: true).', action="store_true")
     parser.add_argument(
@@ -75,10 +82,14 @@ if __name__ == "__main__":
                         type=int, help='Number of CNN backbone layers to train (min: 0, max: 5, default: 3).')
     parser.add_argument('--no-visual', default=True, action='store_true',
                         help='Disable visualization software in test mode.')
-    parser.add_argument('--no-save', default=False, action='store_true',
+    parser.add_argument('--no-save', default=True, action='store_true',
                         help='Disable results export software.')
     parser.add_argument('--no-threading-linux', default=True, action='store_true',
                         help='Disable multithreading library in Linux due to possible race conditions.')
+    parser.add_argument('--no-onnx', default=False, action='store_true',
+                        help='Disable model export in ONNX format.')
+    parser.add_argument('--generate-script-module', default=True, action='store_true',
+                        help='Use `torch.jit.trace` to generate a `torch.jit.ScriptModule` via tracing.')
     args = parser.parse_args()
 
     # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
@@ -100,27 +111,19 @@ if __name__ == "__main__":
     if args.trainable_layers > 5 or args.trainable_layers < 0:
         raise ValueError(
             f"Number of CNN backbone trainable layers must be an integer defined between 0 and 5.")
-    
+
     # check platform and reconfigure number of workers
     if platform.system() == "Linux" and args.no_threading_linux:
         # RuntimeError: received 0 items of ancdata
         args.num_workers = 1
         print(f"WARNING:"
-            f"\n\tOS family is Linux."
-            f"\n\tLibrary `multithreading` in Python might not function well."
-            f"\n\tSetting number of workers equal to {args.num_workers}.\n")
+              f"\n\tOS family is Linux."
+              f"\n\tLibrary `multithreading` in Python might not function well."
+              f"\n\tSetting number of workers equal to {args.num_workers}.\n")
 
     # initialize the computation device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device utilized:\t[{device}]\n")
-
-    # training dataset
-    # train_data = CustomDetectionDataset(
-    #     root_dir=os.path.join(args.dataset, "train"),
-    #     transforms=get_transform(
-    #         transform_class="train",
-    #         img_size=args.img_size)
-    # )
 
     # training dataset
     train_data = CustomCachedDetectionDataset(
@@ -148,7 +151,6 @@ if __name__ == "__main__":
     )
 
     # training dataloader
-    # TODO https://github.com/pytorch/vision/blob/aedd39792d07af58e55ec028ed344d63debbd281/references/detection/train.py#L170
     dataloader_train = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
@@ -201,9 +203,6 @@ if __name__ == "__main__":
         weight_decay=args.weight_decay
     )
 
-    # load model to device
-    model = model.to(device)
-
     # setup output paths
     datetime_tag = datetime.datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
     model_save_dir = Path(args.root_dir) / datetime_tag / "model"
@@ -241,15 +240,7 @@ if __name__ == "__main__":
     log_save_dir_validation = log_save_dir / "validation.txt"
 
     # initialize lr scheduler
-    if args.lr_scheduler.lower() == 'multisteplr':
-        lr_scheduler = optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=args.lr_steps, gamma=args.lr_gamma)
-    elif args.lr_scheduler.lower() == 'cosineannealinglr':
-        lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=args.epochs)
-    else:
-        raise RuntimeError("Invalid lr scheduler '{}'. Only MultiStepLR and CosineAnnealingLR "
-                           "are supported.".format(args.lr_scheduler.lower()))
+    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max')
 
     # load checkpoint
     if args.resume:
@@ -281,18 +272,84 @@ if __name__ == "__main__":
 
     # initialize best model criterion
     elite_model_criterion = EliteModel(data_dir=log_save_dir)
+    
+    # initialize tensorboard instance
+    writer = SummaryWriter(log_save_dir, comment=args.project)
+    tb_model = TraceWrapper(model)
+    tb_model.eval()
+    writer.add_graph(
+        model=tb_model,
+        input_to_model=torch.rand([3, args.img_size, args.img_size]).unsqueeze(0), 
+        verbose=False, 
+        use_strict_trace=True
+    )
+
+    # load model to device
+    model = model.to(device)
+
+    # profile the model
+    prof = None
+    if args.profiling:
+        prof = torch.profiler.profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=torch.profiler.schedule(
+                wait=args.prof_settings[0],
+                warmup=args.prof_settings[1],
+                active=args.prof_settings[2],
+                repeat=args.prof_settings[3]),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                log_save_dir),
+            use_cuda=True if device == torch.device("cuda") else False,
+            profile_memory=True,
+            with_flops=True,
+            with_modules=True,
+            record_shapes=True,
+            with_stack=True)
+
+        prof.start()
 
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
 
-        train_logger = train(model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-                             epoch=epoch, log_filepath=log_save_dir_train, num_classes=args.num_classes,
-                             no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir)
-        train_logger.export_data()
-        validate(model=model, dataloader=dataloader_valid, device=device,
-                 log_filepath=log_save_dir_validation, epoch=epoch)
+        if epoch >= (args.prof_settings[0] + args.prof_settings[1] + args.prof_settings[2]) * args.prof_settings[3] and args.profiling:
+            prof.stop()
 
-        lr_scheduler.step()
+        train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
+            model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
+            epoch=epoch, log_filepath=log_save_dir_train, writer=writer, num_classes=args.num_classes,
+            no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir)
+        train_logger.export_data()
+
+        writer.add_scalar('lr/train', lr, epoch)
+        writer.add_scalar('loss/train', loss_acc, epoch)
+        writer.add_scalar('loss_classifier/train', loss_classifier_acc, epoch)
+        writer.add_scalar('loss_box_reg/train', loss_box_reg_acc, epoch)
+        writer.add_scalar('loss_objectness/train', loss_objectness_acc, epoch)
+        writer.add_scalar('loss_rpn_box_reg/train',
+                          loss_rpn_box_reg_acc, epoch)
+
+        val_metrics = validate(model=model, dataloader=dataloader_valid, device=device,
+                               log_filepath=log_save_dir_validation, epoch=epoch)
+
+        writer.add_scalar('mAP@.5:.95/validation',
+                          val_metrics.get("mAP@.5:.95"), epoch)
+        writer.add_scalar('mAP@.5/validation',
+                          val_metrics.get("mAP@.5"), epoch)
+        writer.add_scalar('mAP@.75/validation',
+                          val_metrics.get("mAP@.75"), epoch)
+        writer.add_scalar('mAP@s/validation',
+                          val_metrics.get("mAP@s"), epoch)
+        writer.add_scalar('mAP@m/validation',
+                          val_metrics.get("mAP@m"), epoch)
+        writer.add_scalar('mAP@l/validation',
+                          val_metrics.get("mAP@l"), epoch)
+        writer.add_scalar('Recall/validation',
+                          val_metrics.get("Recall"), epoch)
+
+        # Visualize weight histograms
+        weight_histograms(writer, epoch, model)
+
+        lr_scheduler.step(val_metrics.get("mAP@.5"))
         elite_model_criterion.calculate_metrics(epoch=epoch + 1)
 
         if elite_model_criterion.evaluate_model():
@@ -304,6 +361,49 @@ if __name__ == "__main__":
                 'lr_scheduler': lr_scheduler.state_dict(),
             }, os.path.join(model_save_dir, 'best.pt'))
 
+            if not args.no_onnx:
+                onnx_model = copy.deepcopy(model)
+                onnx_model.to('cpu')
+
+                # Export the model
+                torch.onnx.export(
+                    # model being run
+                    onnx_model,
+                    # model input (or a tuple for multiple inputs)
+                    torch.rand([3, args.img_size, args.img_size]).unsqueeze(0),
+                    # where to save the model (can be a file or file-like object)
+                    os.path.join(model_save_dir, 'best.onnx'),
+                    # store the trained parameter weights inside the model file
+                    export_params=True,
+                    # the ONNX version to export the model to
+                    opset_version=10,
+                    # whether to execute constant folding for optimization
+                    do_constant_folding=True,
+                    # the model's input names
+                    input_names=['input'],
+                    # the model's output names
+                    output_names=['output'],
+                    # variable length axes
+                    dynamic_axes={
+                        'input': {0: 'batch_size'},
+                        'output': {0: 'batch_size'}
+                    },
+                    verbose=True
+                )
+            if args.generate_script_module:
+                model_copy = copy.deepcopy(model)
+                model_copy.to('cpu')
+
+                # An example input provided to the defined model
+                example = torch.rand(
+                    [3, args.img_size, args.img_size]).unsqueeze(0)
+
+                # Use torch.jit.trace to generate a torch.jit.ScriptModule via tracing
+                traced_script_module = torch.jit.trace(model_copy, example)
+
+                # Serializing script module to a file
+                traced_script_module.save(os.path.join(model_save_dir, 'traced_best.pt'))
+
         # save last model to disk
         torch.save({
             'epoch': epoch,
@@ -312,4 +412,53 @@ if __name__ == "__main__":
             'lr_scheduler': lr_scheduler.state_dict(),
         }, os.path.join(model_save_dir, 'last.pt'))
 
+        if not args.no_onnx:
+            onnx_model = copy.deepcopy(model)
+            onnx_model.to('cpu')
+
+            # Export the model
+            torch.onnx.export(
+                # model being run
+                onnx_model,
+                # model input (or a tuple for multiple inputs)
+                torch.rand([3, args.img_size, args.img_size]).unsqueeze(0),
+                # where to save the model (can be a file or file-like object)
+                os.path.join(model_save_dir, 'last.onnx'),
+                # store the trained parameter weights inside the model file
+                export_params=True,
+                # the ONNX version to export the model to
+                opset_version=10,
+                # whether to execute constant folding for optimization
+                do_constant_folding=True,
+                # the model's input names
+                input_names=['input'],
+                # the model's output names
+                output_names=['output'],
+                # variable length axes
+                dynamic_axes={
+                    'input': {0: 'batch_size'},
+                    'output': {0: 'batch_size'}
+                },
+                verbose=True
+            )
+        
+        if args.generate_script_module:
+            model_copy = copy.deepcopy(model)
+            model_copy.to('cpu')
+
+            # An example input provided to the defined model
+            example = torch.rand(
+                [3, args.img_size, args.img_size]).unsqueeze(0)
+
+            # Use torch.jit.trace to generate a torch.jit.ScriptModule via tracing
+            traced_script_module = torch.jit.trace(model_copy, example)
+
+            # Serializing script module to a file
+            traced_script_module.save(os.path.join(
+                model_save_dir, 'traced_last.pt'))
+
+        if epoch < (args.prof_settings[0] + args.prof_settings[1] + args.prof_settings[2]) * args.prof_settings[3] and args.profiling:
+            prof.step()
+
     experiment_data_plots(root_dir=log_save_dir, out_dir=plots_save_dir)
+    writer.close()

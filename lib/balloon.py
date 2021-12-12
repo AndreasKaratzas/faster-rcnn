@@ -83,7 +83,7 @@ if __name__ == '__main__':
     export_labels("../data/balloon/train")
     # export labels for validation subset
     export_labels("../data/balloon/val")
-    # reallocate images in training directory
+    # relocate images in training directory
     move_images("../data/balloon/train", "../data/balloon/train/images")
-    # reallocate images in validation directory
+    # relocate images in validation directory
     move_images("../data/balloon/val", "../data/balloon/val/images")

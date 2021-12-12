@@ -5,9 +5,16 @@ import numpy as np
 from tqdm import tqdm
 from typing import List, Tuple
 from torch.utils.data import DataLoader
+from sklearn.neighbors import KernelDensity
 
 
-def autoanchors(dataloader: DataLoader, n_anchors: int = 5, outlier_segment: float = 2e-2) -> Tuple[List[float], List[float]]:
+def autoanchors(
+    dataloader: DataLoader, 
+    n_anchors: int = 5, 
+    outlier_segment: float = 1e-2, 
+    bandwidth: float = 1e-1, 
+    outlier_threshold: float = 1e-1
+) -> Tuple[List[float], List[float]]:
     # parse box areas and register anchors
     anchors, aspects, init_flag = None, None, True
     for _, Y in tqdm(dataloader, desc="Configuring autoanchors", unit=" samples processed"):
@@ -20,21 +27,40 @@ def autoanchors(dataloader: DataLoader, n_anchors: int = 5, outlier_segment: flo
             ratios = sides[:, 1] / sides[:, 0]
             ratios = ratios[~(ratios == 0)]
 
-            ratios_flipped = sides[:, 0] / sides[:, 1]
-            ratios_flipped = ratios_flipped[~(ratios_flipped == 0)]
-
             if init_flag:
-                aspects = np.hstack((ratios, ratios_flipped))
+                aspects = ratios
                 anchors = torch.sqrt(sample['area']).numpy()
                 init_flag = False
             else:
-                aspects = np.hstack((aspects, ratios, ratios_flipped))
+                aspects = np.hstack((aspects, ratios))
                 anchors = np.hstack(
                     (anchors, torch.sqrt(sample['area']).numpy()))
 
+    anchors = anchors[:, np.newaxis]
+    aspects = aspects[:, np.newaxis]
+
+    # anchor_universe = np.linspace(np.amin(anchors), np.amax(
+    #     anchors), np.prod(anchors.shape) * 10)[:, np.newaxis]
+    # aspect_universe = np.linspace(np.amin(aspects), np.amax(
+    #     aspects), np.prod(aspects.shape) * 10)[:, np.newaxis]
+    
+    anchor_kde = KernelDensity(
+        kernel="epanechnikov", bandwidth=bandwidth).fit(anchors)
+    anchor_log_dens = anchor_kde.score_samples(anchors)
+    anchor_mask = (np.exp(anchor_log_dens) < outlier_threshold)
+
+    aspect_kde = KernelDensity(
+        kernel="epanechnikov", bandwidth=bandwidth).fit(aspects)
+    aspect_log_dens = aspect_kde.score_samples(aspects)
+    aspect_mask = (np.exp(aspect_log_dens) < outlier_threshold)
+
+    # remove outliers
+    anchors = anchors[anchor_mask]
+    aspects = aspects[aspect_mask]
+
     # sort anchors
-    anchors.sort()
-    aspects.sort()
+    anchors = np.sort(anchors, axis=None)
+    aspects = np.sort(aspects, axis=None)
 
     # configure buckets
     n_samples = anchors.shape[0]

@@ -3,11 +3,28 @@ import os
 import sys
 import torch
 import hashlib
+import torch.nn as nn
 import torch.distributed as dist
 
 from typing import List, Tuple
 
 from lib.presets import DetectionPresetTrainTorchVision, DetectionPresetEvalTorchVision, DetectionPresetTestTorchVision
+
+
+def dict_to_tuple(out_dict):
+    if "masks" in out_dict.keys():
+        return out_dict["boxes"], out_dict["scores"], out_dict["labels"], out_dict["masks"]
+    return out_dict["boxes"], out_dict["scores"], out_dict["labels"]
+
+
+class TraceWrapper(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, images, targets=None):
+        out = self.model(images, targets)
+        return dict_to_tuple(out[0])
 
 
 # Disable
@@ -18,6 +35,37 @@ def blockPrint():
 # Restore
 def enablePrint():
     sys.stdout = sys.__stdout__
+
+
+def weight_histograms_conv2d(writer, step, weights, layer_number):
+    weights_shape = weights.shape
+    num_kernels = weights_shape[0]
+    for k in range(num_kernels):
+        flattened_weights = weights[k].flatten()
+        tag = f"layer_{layer_number}/kernel_{k}"
+        writer.add_histogram(tag, flattened_weights,
+                             global_step=step, bins='tensorflow')
+
+
+def weight_histograms_linear(writer, step, weights, layer_number):
+    flattened_weights = weights.flatten()
+    tag = f"layer_{layer_number}"
+    writer.add_histogram(tag, flattened_weights,
+                         global_step=step, bins='tensorflow')
+
+
+def weight_histograms(writer, step, model):
+    # Iterate over all model layers
+    for layer_number in range(len(model.layers)):
+        # Get layer
+        layer = model.layers[layer_number]
+        # Compute weight histograms for appropriate layer
+        if isinstance(layer, nn.Conv2d):
+            weights = layer.weight
+            weight_histograms_conv2d(writer, step, weights, layer_number)
+        elif isinstance(layer, nn.Linear):
+            weights = layer.weight
+            weight_histograms_linear(writer, step, weights, layer_number)
 
 
 def get_transform(transform_class: str, img_size: int = 640):

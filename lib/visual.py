@@ -163,3 +163,5 @@ class VisualTest():
             # Export result
             self.export(img_set=img_set, file_idx=self.img_cntr)
             self.img_cntr += 1
+
+        return img_set
