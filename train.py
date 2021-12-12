@@ -41,9 +41,9 @@ if __name__ == "__main__":
                         help='Number of classes in dataset including background.')
     parser.add_argument('--backbone', default='resnet50', type=str,
                         help='Backbone CNN for Faster R-CNN (default: resnet50).')
-    parser.add_argument('--batch-size', default=16, type=int,
+    parser.add_argument('--batch-size', default=4, type=int,
                         help='Batch size (default: 16).')
-    parser.add_argument('--epochs', default=100, type=int, metavar='N',
+    parser.add_argument('--epochs', default=2, type=int, metavar='N',
                         help='Number of total epochs to run (default: 100).')
     parser.add_argument('--num-workers', default=8, type=int, metavar='N',
                         help='Number of data loading workers (default: 8).')
@@ -71,7 +71,8 @@ if __name__ == "__main__":
     parser.add_argument(
         '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
     parser.add_argument('--aspect-ratios', default=[
-                        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int, help='Anchor ratios.')
+                        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int, 
+                        help='Anchor ratios.')
     parser.add_argument('--no-autoanchor', default=False, action='store_true',
                         help='Disable anchor recommendation software.')
     parser.add_argument('--start-epoch', default=0,
@@ -79,7 +80,8 @@ if __name__ == "__main__":
     parser.add_argument('--conf-threshold', default=0.5,
                         type=float, help='Prediction score threshold.')
     parser.add_argument('--trainable-layers', default=3,
-                        type=int, help='Number of CNN backbone layers to train (min: 0, max: 5, default: 3).')
+                        type=int, help=f'Number of CNN backbone layers to train '
+                                       f'(min: 0, max: 5, default: 3).')
     parser.add_argument('--no-visual', default=True, action='store_true',
                         help='Disable visualization software in test mode.')
     parser.add_argument('--no-save', default=True, action='store_true',

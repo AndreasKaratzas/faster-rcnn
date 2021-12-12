@@ -55,23 +55,9 @@ class ResizeImage(jit.ScriptModule):
         self, img_size: int = 640, interpolation=F.InterpolationMode.BILINEAR, max_size=None, antialias=None
     ):
         super().__init__()
-        if not isinstance(img_size, (int, Sequence)):
-            raise TypeError(
-                "Size should be int or sequence. Got {}".format(type(img_size)))
-        if isinstance(img_size, Sequence) and len(img_size) not in (1, 2):
-            raise ValueError(
-                "If size is a sequence, it should have 1 or 2 values")
+        
         self.max_size = max_size
         self.img_size = img_size
-
-        # Backward compatibility with integer value
-        if isinstance(interpolation, int):
-            warnings.warn(
-                "Argument interpolation should be of type InterpolationMode instead of int. "
-                "Please, use InterpolationMode enum."
-            )
-            interpolation = F._interpolation_modes_from_int(interpolation)
-
         self.interpolation = interpolation
         self.antialias = antialias
 
@@ -79,12 +65,6 @@ class ResizeImage(jit.ScriptModule):
     def forward(
         self, image: Tensor
     ) -> Tensor:
-        if isinstance(image, torch.Tensor):
-            if image.ndimension() not in {2, 3}:
-                raise ValueError(
-                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
-            elif image.ndimension() == 2:
-                image = image.unsqueeze(0)
 
         image = F.resize(image, [self.img_size, self.img_size], self.interpolation,
                  self.max_size, self.antialias)
@@ -102,23 +82,9 @@ class Resize(jit.ScriptModule):
         self, img_size: int = 640, interpolation=F.InterpolationMode.BILINEAR, max_size=None, antialias=None
     ):
         super().__init__()
-        if not isinstance(img_size, (int, Sequence)):
-            raise TypeError(
-                "Size should be int or sequence. Got {}".format(type(img_size)))
-        if isinstance(img_size, Sequence) and len(img_size) not in (1, 2):
-            raise ValueError(
-                "If size is a sequence, it should have 1 or 2 values")
+        
         self.max_size = max_size
         self.img_size = img_size
-
-        # Backward compatibility with integer value
-        if isinstance(interpolation, int):
-            warnings.warn(
-                "Argument interpolation should be of type InterpolationMode instead of int. "
-                "Please, use InterpolationMode enum."
-            )
-            interpolation = F._interpolation_modes_from_int(interpolation)
-
         self.interpolation = interpolation
         self.antialias = antialias
 
@@ -126,13 +92,7 @@ class Resize(jit.ScriptModule):
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
-        if isinstance(image, torch.Tensor):
-            if image.ndimension() not in {2, 3}:
-                raise ValueError(
-                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
-            elif image.ndimension() == 2:
-                image = image.unsqueeze(0)
-
+       
         orig_w, orig_h = F.get_image_size(image)
 
         scaled_w = self.img_size / orig_w
@@ -226,16 +186,7 @@ class RandomIoUCrop(jit.ScriptModule):
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
-        if target is None:
-            raise ValueError("The targets can't be None for this transform.")
-
-        if isinstance(image, torch.Tensor):
-            if image.ndimension() not in {2, 3}:
-                raise ValueError(
-                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
-            elif image.ndimension() == 2:
-                image = image.unsqueeze(0)
-
+        
         orig_w, orig_h = F.get_image_size(image)
 
         while True:
@@ -317,13 +268,7 @@ class RandomZoomOut(jit.ScriptModule):
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
-        if isinstance(image, torch.Tensor):
-            if image.ndimension() not in {2, 3}:
-                raise ValueError(
-                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
-            elif image.ndimension() == 2:
-                image = image.unsqueeze(0)
-
+        
         if torch.rand(1) < self.p:
             return image, target
 
@@ -380,13 +325,7 @@ class RandomPhotometricDistort(jit.ScriptModule):
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
-        if isinstance(image, torch.Tensor):
-            if image.ndimension() not in {2, 3}:
-                raise ValueError(
-                    f"image should be 2/3 dimensional. Got {image.ndimension()} dimensions.")
-            elif image.ndimension() == 2:
-                image = image.unsqueeze(0)
-
+        
         r = torch.rand(7)
 
         if r[0] < self.p:
