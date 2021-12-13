@@ -1,12 +1,16 @@
 
+from typing import Dict
+
+import albumentations as A
 import cv2
+import numpy as np
 import torch
 import torchvision
-import numpy as np
-import albumentations as A
-import lib.transforms as T
-
 from albumentations.pytorch import ToTensorV2
+from PIL import Image
+from torch import Tensor
+
+import lib.transforms as T
 
 
 class DetectionPresetTrainTorchVision:
@@ -20,7 +24,7 @@ class DetectionPresetTrainTorchVision:
             T.ConvertImageDtype(torch.float),
         ])
     
-    def __call__(self, img, target):
+    def __call__(self, img: Image, target):
         return self.transform(img, target)
     
 
@@ -33,7 +37,7 @@ class DetectionPresetEvalTorchVision:
             T.ConvertImageDtype(torch.float),
         ])
 
-    def __call__(self, img, target):
+    def __call__(self, img: Image, target: Dict[str, Tensor]):
         return self.transform(img, target)
 
 

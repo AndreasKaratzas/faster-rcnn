@@ -1,21 +1,20 @@
 
-from collections.abc import Sequence
-from typing import List, Tuple, Dict, Optional
-
-import warnings
+from typing import Dict, List, Optional, Tuple
 
 import torch
 import torchvision
-from torch import nn, jit, Tensor
+from PIL import Image
+from torch import Tensor, jit, nn
 from torchvision.transforms import functional as F
 from torchvision.transforms import transforms as T
+from torchvision.transforms.functional import InterpolationMode
 
 
 class Compose:
     def __init__(self, transforms):
         self.transforms = transforms
 
-    def __call__(self, image, target=None):
+    def __call__(self, image: Image, target: Dict[str, Tensor] = None):
         for t in self.transforms:
             image, target = t(image, target)
         return image, target
@@ -26,18 +25,12 @@ class ResizeTarget(jit.ScriptModule):
         self, img_size: int = 640
     ):
         super().__init__()
-        if not isinstance(img_size, (int, Sequence)):
-            raise TypeError(
-                "Size should be int or sequence. Got {}".format(type(img_size)))
-        if isinstance(img_size, Sequence) and len(img_size) not in (1, 2):
-            raise ValueError(
-                "If size is a sequence, it should have 1 or 2 values")
         self.img_size = img_size
 
     @jit.script_method
     def forward(
-        self, target: Dict[str, Tensor] = None, height: int = 640, width: int = 640
-    ) -> Dict[str, Tensor]:
+        self, target: Tensor, height: int = 640, width: int = 640
+    ) -> Tensor:
 
         scaled_w = self.img_size / width
         scaled_h = self.img_size / height
@@ -48,11 +41,21 @@ class ResizeTarget(jit.ScriptModule):
         target[:, 4] = target[:, 4] * scaled_h
 
         return target
+    
+    def __getstate__(self):
+        return self.img_size
+
+    def __setstate__(self, img_size: int):
+        self.img_size = img_size
 
 
 class ResizeImage(jit.ScriptModule):
     def __init__(
-        self, img_size: int = 640, interpolation=F.InterpolationMode.BILINEAR, max_size=None, antialias=None
+        self, 
+        img_size: int = 640, 
+        interpolation=F.InterpolationMode.BILINEAR, 
+        max_size=None, 
+        antialias=None
     ):
         super().__init__()
         
@@ -70,6 +73,21 @@ class ResizeImage(jit.ScriptModule):
                  self.max_size, self.antialias)
 
         return image
+    
+    def __getstate__(self):
+        return (self.max_size, self.img_size, self.interpolation, self.antialias)
+
+    def __setstate__(
+        self, 
+        img_size: int, 
+        max_size: int = None, 
+        interpolation: InterpolationMode = F.InterpolationMode.BILINEAR, 
+        antialias: Optional[bool] = None
+    ):
+        self.max_size = max_size
+        self.img_size = img_size
+        self.interpolation = interpolation
+        self.antialias = antialias
 
     def __repr__(self):
         interpolate_str = self.interpolation.value
@@ -79,7 +97,11 @@ class ResizeImage(jit.ScriptModule):
 
 class Resize(jit.ScriptModule):
     def __init__(
-        self, img_size: int = 640, interpolation=F.InterpolationMode.BILINEAR, max_size=None, antialias=None
+        self, 
+        img_size: int = 640, 
+        interpolation=F.InterpolationMode.BILINEAR, 
+        max_size=None, 
+        antialias=None
     ):
         super().__init__()
         
@@ -109,6 +131,21 @@ class Resize(jit.ScriptModule):
 
         return image, target
 
+    def __getstate__(self):
+        return (self.max_size, self.img_size, self.interpolation, self.antialias)
+
+    def __setstate__(
+        self,
+        img_size: int,
+        max_size: int = None,
+        interpolation: InterpolationMode = F.InterpolationMode.BILINEAR,
+        antialias: Optional[bool] = None
+    ):
+        self.max_size = max_size
+        self.img_size = img_size
+        self.interpolation = interpolation
+        self.antialias = antialias
+
     def __repr__(self):
         interpolate_str = self.interpolation.value
         return self.__class__.__name__ + '(size={0}, interpolation={1}, max_size={2}, antialias={3})'.format(
@@ -129,18 +166,7 @@ class RandomHorizontalFlip(T.RandomHorizontalFlip):
         return image, target
 
 
-class ToTensor(jit.ScriptModule):
-    @jit.script_method
-    def forward(
-        self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
-    ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
-        image = F.pil_to_tensor(image)
-        image = F.convert_image_dtype(image)
-        return image, target
-
-
-class PILToTensor(jit.ScriptModule):
-    @jit.script_method
+class PILToTensor(nn.Module):
     def forward(
         self, image: Tensor, target: Optional[Dict[str, Tensor]] = None
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
@@ -159,6 +185,12 @@ class ConvertImageDtype(jit.ScriptModule):
     ) -> Tuple[Tensor, Optional[Dict[str, Tensor]]]:
         image = F.convert_image_dtype(image, self.dtype)
         return image, target
+    
+    def __getstate__(self):
+        return self.dtype
+
+    def __setstate__(self, dtype: torch.dtype):
+        self.dtype = dtype
 
 
 class RandomIoUCrop(jit.ScriptModule):
@@ -349,13 +381,6 @@ class RandomPhotometricDistort(jit.ScriptModule):
         if r[6] < self.p:
             channels = F.get_image_num_channels(image)
             permutation = torch.randperm(channels)
-
-            is_pil = F._is_pil_image(image)
-            if is_pil:
-                image = F.pil_to_tensor(image)
-                image = F.convert_image_dtype(image)
-            image = image[..., permutation, :, :]
-            if is_pil:
-                image = F.to_pil_image(image)
+            image = image.permute(permutation)
 
         return image, target

@@ -1,5 +1,6 @@
 # TODO
 
+* Fix `torch.jit` https://pytorch.org/vision/stable/auto_examples/plot_scripted_tensor_transforms.html
 * Colors in messages
 * Add docstrings
 * pip install torch-tb-profiler
