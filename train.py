@@ -202,7 +202,7 @@ if __name__ == "__main__":
         tb_sampler = torch.utils.data.SubsetRandomSampler(tb_idx)
         dataloader_tb = DataLoader(
             dataset=train_data, 
-            batch_size=args.batch_size * 2, 
+            batch_size=1, 
             shuffle=False, 
             num_workers=args.num_workers,
             collate_fn=collate_fn,
