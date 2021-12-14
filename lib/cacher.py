@@ -206,7 +206,7 @@ class CustomCachedDetectionDataset(Dataset):
                 # load image sample
                 img = Image.open(img_path).convert("RGB")
                 # reduce image dimensions
-                img = self.reduce_image(img=img)
+                img = img.resize((self.img_size, self.img_size), Image.NEAREST)
                 # assert error if image was not found
                 assert img is not None, f'Image Not Found {image_idx}'
                 # cache image
