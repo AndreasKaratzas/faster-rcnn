@@ -1,8 +1,4 @@
 
-import tkinter
-import matplotlib
-matplotlib.use('TkAgg')
-
 import argparse
 import datetime
 import json
