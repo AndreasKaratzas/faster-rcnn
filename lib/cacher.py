@@ -95,13 +95,10 @@ def _load_image(self, img_idx: int):
         img_path = self.img_files[img_idx]
         # load image sample
         # img = Image.open(img_path).convert("RGB")
-        img = cv2.imread(img_path)  # BGR
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = Image.open(img_path)
         # reduce image dimensions
         # img = self.reduce_image(img=img)
-        img = cv2.resize(img, (self.img_size, self.img_size),
-                         interpolation=cv2.INTER_NEAREST)
-        img = Image.fromarray(np.uint8(img))
+        img.draft('RGB', (self.img_size, self.img_size))
         # assert error if image was not found
         assert img is not None, f'Image Not Found {img_path}'
         # return result
