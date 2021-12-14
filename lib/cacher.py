@@ -98,7 +98,7 @@ def _load_image(self, img_idx: int):
         img = Image.open(img_path)
         # reduce image dimensions
         # img = self.reduce_image(img=img)
-        img.draft('RGB', (self.img_size, self.img_size))
+        img = img.resize((self.img_size, self.img_size), Image.NEAREST)
         # assert error if image was not found
         assert img is not None, f'Image Not Found {img_path}'
         # return result
