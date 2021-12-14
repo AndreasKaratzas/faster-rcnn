@@ -61,10 +61,10 @@ if __name__ == "__main__":
                         metavar='W', help='weight decay (default: 1e-4).')
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
-    parser.add_argument('--cache', default=False, action='store_true',
-                        help='Cache the images found in the dataset (default: False).')
-    parser.add_argument('--profiling', default=False, action='store_true',
-                        help='Profile the training loop (default: False).')
+    parser.add_argument('--cache', action='store_true',
+                        help='Cache the images found in the dataset.')
+    parser.add_argument('--profiling', action='store_true',
+                        help='Profile the training loop.')
     parser.add_argument('--prof-settings', default=[
                         5, 5, 10, 3], nargs='+', type=int,
                         help=f'Profiling settings. The order is:\n'
@@ -72,14 +72,14 @@ if __name__ == "__main__":
                              f'2. warmup (default: 5)\n'
                              f'3. active (default: 10)\n'
                              f'4. repeat (default: 3)')
-    parser.add_argument('--pretrained', default=True,
-                        help='Use pre-trained models (default: true).', action="store_true")
+    parser.add_argument('--pretrained', action="store_true",
+                        help='Use pre-trained models.')
     parser.add_argument(
         '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
     parser.add_argument('--aspect-ratios', default=[
                         0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int, 
                         help='Anchor ratios.')
-    parser.add_argument('--no-autoanchor', default=False, action='store_true',
+    parser.add_argument('--no-autoanchor', action='store_true',
                         help='Disable anchor recommendation software.')
     parser.add_argument('--start-epoch', default=0,
                         type=int, help='Start epoch.')
@@ -88,20 +88,20 @@ if __name__ == "__main__":
     parser.add_argument('--trainable-layers', default=3,
                         type=int, help=f'Number of CNN backbone layers to train '
                                        f'(min: 0, max: 5, default: 3).')
-    parser.add_argument('--no-mixed-precision', default=False, action='store_true',
-                        help='Disable mixed precision for model training (default: False).')
-    parser.add_argument('--no-visual', default=False, action='store_true',
-                        help='Disable visualization of randomly selected samples in tensorboard (default: False).')
-    parser.add_argument('--no-model-graph', default=True, action='store_true',
-                        help='Disable visualization of model as a graph in tensorboard (default: True).')
-    parser.add_argument('--no-save', default=True, action='store_true',
-                        help='Disable results export software (default: True).')
-    parser.add_argument('--no-threading-linux', default=True, action='store_true',
-                        help='Disable multithreading library in Linux due to possible race conditions (default: True).')
-    parser.add_argument('--no-onnx', default=False, action='store_true',
-                        help='Disable model export in ONNX format (default: False).')
-    parser.add_argument('--generate-script-module', default=True, action='store_true',
-                        help='Use `torch.jit.trace` to generate a `torch.jit.ScriptModule` via tracing (default: True).')
+    parser.add_argument('--no-mixed-precision', action='store_true',
+                        help='Disable mixed precision for model training.')
+    parser.add_argument('--no-visual', action='store_true',
+                        help='Disable visualization of randomly selected samples in tensorboard.')
+    parser.add_argument('--no-model-graph', action='store_true',
+                        help='Disable visualization of model as a graph in tensorboard.')
+    parser.add_argument('--no-save', action='store_true',
+                        help='Disable results export software.')
+    parser.add_argument('--no-threading-linux', action='store_true',
+                        help='Disable multithreading library in Linux due to possible race conditions.')
+    parser.add_argument('--no-onnx', action='store_true',
+                        help='Disable model export in ONNX format.')
+    parser.add_argument('--generate-script-module', action='store_true',
+                        help='Use `torch.jit.trace` to generate a `torch.jit.ScriptModule` via tracing.')
     args = parser.parse_args()
 
     # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
