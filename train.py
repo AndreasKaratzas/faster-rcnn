@@ -1,6 +1,7 @@
 
+import tkinter
 import matplotlib
-matplotlib.use('ggplot')
+matplotlib.use('TkAgg')
 
 import argparse
 import datetime
