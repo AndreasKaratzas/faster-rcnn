@@ -7,9 +7,14 @@ import os
 import warnings
 import platform
 from pathlib import Path
-from pprint import pprint
 import torch
-from torch import onnx
+
+APEX_NOT_INSTALLED = False
+try:
+    from apex import amp
+except ImportError:
+    APEX_NOT_INSTALLED = True
+
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.profiler import ProfilerActivity
@@ -18,6 +23,7 @@ from torch.utils.tensorboard import SummaryWriter
 from lib.autoanchor import autoanchors
 from lib.cacher import CustomCachedDetectionDataset
 from lib.elitism import EliteModel
+from lib.nvidia import cuda_check
 from lib.engine import train, validate
 from lib.model import configure_model
 from lib.plots import experiment_data_plots
@@ -78,20 +84,24 @@ if __name__ == "__main__":
     parser.add_argument('--start-epoch', default=0,
                         type=int, help='Start epoch.')
     parser.add_argument('--conf-threshold', default=0.5,
-                        type=float, help='Prediction score threshold.')
+                        type=float, help='Prediction score threshold (default: 0.5).')
     parser.add_argument('--trainable-layers', default=3,
                         type=int, help=f'Number of CNN backbone layers to train '
                                        f'(min: 0, max: 5, default: 3).')
-    parser.add_argument('--no-visual', default=True, action='store_true',
-                        help='Disable visualization software in test mode.')
+    parser.add_argument('--no-mixed-precision', default=False, action='store_true',
+                        help='Disable mixed precision for model training (default: False).')
+    parser.add_argument('--no-visual', default=False, action='store_true',
+                        help='Disable visualization of randomly selected samples in tensorboard (default: False).')
+    parser.add_argument('--no-model-graph', default=True, action='store_true',
+                        help='Disable visualization of model as a graph in tensorboard (default: True).')
     parser.add_argument('--no-save', default=True, action='store_true',
-                        help='Disable results export software.')
+                        help='Disable results export software (default: True).')
     parser.add_argument('--no-threading-linux', default=True, action='store_true',
-                        help='Disable multithreading library in Linux due to possible race conditions.')
+                        help='Disable multithreading library in Linux due to possible race conditions (default: True).')
     parser.add_argument('--no-onnx', default=False, action='store_true',
-                        help='Disable model export in ONNX format.')
+                        help='Disable model export in ONNX format (default: False).')
     parser.add_argument('--generate-script-module', default=True, action='store_true',
-                        help='Use `torch.jit.trace` to generate a `torch.jit.ScriptModule` via tracing.')
+                        help='Use `torch.jit.trace` to generate a `torch.jit.ScriptModule` via tracing (default: True).')
     args = parser.parse_args()
 
     # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
@@ -126,6 +136,16 @@ if __name__ == "__main__":
     # initialize the computation device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Device utilized:\t[{device}]\n")
+
+    if device == torch.device('cuda'):
+        cuda_arch = cuda_check()
+
+        if not 'Turing' in cuda_arch and not 'Volta' in cuda_arch:
+
+            if APEX_NOT_INSTALLED:
+                print(f"Found NVIDIA GPU of {cuda_arch} Architecture.")
+                print(f"Disabling apex software for mixed-precision model training.")
+                args.no_mixed_precision = True
 
     # training dataset
     train_data = CustomCachedDetectionDataset(
@@ -165,12 +185,25 @@ if __name__ == "__main__":
     # validation dataloader
     dataloader_valid = DataLoader(
         dataset=val_data,
-        batch_size=args.batch_size,
+        batch_size=args.batch_size * 2,
         shuffle=False,
         num_workers=args.num_workers,
         collate_fn=collate_fn,
         pin_memory=True
     )
+
+    dataloader_tb = None
+    if not args.no_visual:
+        tb_idx = torch.randperm(len(train_data))[:int(len(train_data) * 1e-1)]
+        tb_sampler = torch.utils.data.SubsetRandomSampler(tb_idx)
+        dataloader_tb = DataLoader(
+            dataset=train_data, 
+            batch_size=args.batch_size * 2, 
+            shuffle=False, 
+            num_workers=args.num_workers,
+            collate_fn=collate_fn,
+            sampler=tb_sampler
+        )
 
     # autoanchor software
     if not args.no_autoanchor:
@@ -187,7 +220,7 @@ if __name__ == "__main__":
         f'\t{args.anchor_sizes}\tanchor sizes and\n'
         f'\t{args.aspect_ratios}\taspect ratios\n\nDataset stats:\n'
         f'\tLength of train data:\t\t{len(train_data):5d}\n'
-        f'\tLength of validation data:\t{len(val_data):5d}\n\n\n')
+        f'\tLength of validation data:\t{len(val_data):5d}\n\n')
 
     # custom model init
     model = configure_model(
@@ -253,6 +286,10 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        
+        if type(checkpoint['amp']) is not None:
+            amp.load_state_dict(checkpoint['amp'])
+        
         args.start_epoch = checkpoint['epoch'] + 1
         print(
             f"Training model from checkpoint {args.resume}. Starting from epoch {args.start_epoch}.")
@@ -277,17 +314,23 @@ if __name__ == "__main__":
     
     # initialize tensorboard instance
     writer = SummaryWriter(log_save_dir, comment=args.project)
-    tb_model = TraceWrapper(model)
-    tb_model.eval()
-    writer.add_graph(
-        model=tb_model,
-        input_to_model=torch.rand([3, args.img_size, args.img_size]).unsqueeze(0), 
-        verbose=False, 
-        use_strict_trace=True
-    )
+
+    if not args.no_model_graph:
+        tb_model = TraceWrapper(model)
+        tb_model.eval()
+        writer.add_graph(
+            model=tb_model,
+            input_to_model=torch.rand([3, args.img_size, args.img_size]).unsqueeze(0), 
+            verbose=False, 
+            use_strict_trace=True
+        )
 
     # load model to device
     model = model.to(device)
+
+    if not args.no_mixed_precision:
+        # Wrap the model
+        model, optimizer = amp.initialize(model, optimizer, opt_level='O2')
 
     # profile the model
     prof = None
@@ -313,13 +356,18 @@ if __name__ == "__main__":
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
 
-        if epoch >= (args.prof_settings[0] + args.prof_settings[1] + args.prof_settings[2]) * args.prof_settings[3] and args.profiling:
+        if (epoch >= (
+            args.prof_settings[0] + 
+            args.prof_settings[1] + 
+            args.prof_settings[2]) * 
+            args.prof_settings[3]
+        ) and args.profiling:
             prof.stop()
 
         train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
             model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-            epoch=epoch, log_filepath=log_save_dir_train, writer=writer, num_classes=args.num_classes,
-            no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir)
+            epoch=epoch, log_filepath=log_save_dir_train, writer=writer, num_classes=args.num_classes, apex_activated=not APEX_NOT_INSTALLED,
+            no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir, tb_dataloader=dataloader_tb)
         train_logger.export_data()
 
         writer.add_scalar('lr/train', lr, epoch)
@@ -361,6 +409,7 @@ if __name__ == "__main__":
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'lr_scheduler': lr_scheduler.state_dict(),
+                'amp': amp.state_dict() if not args.no_mixed_precision else None
             }, os.path.join(model_save_dir, 'best.pt'))
 
             if not args.no_onnx:
@@ -412,6 +461,7 @@ if __name__ == "__main__":
             'model': model.state_dict(),
             'optimizer': optimizer.state_dict(),
             'lr_scheduler': lr_scheduler.state_dict(),
+            'amp': amp.state_dict() if not args.no_mixed_precision else None
         }, os.path.join(model_save_dir, 'last.pt'))
 
         if not args.no_onnx:
@@ -459,7 +509,12 @@ if __name__ == "__main__":
             traced_script_module.save(os.path.join(
                 model_save_dir, 'traced_last.pt'))
 
-        if epoch < (args.prof_settings[0] + args.prof_settings[1] + args.prof_settings[2]) * args.prof_settings[3] and args.profiling:
+        if (epoch < (
+            args.prof_settings[0] + 
+            args.prof_settings[1] + 
+            args.prof_settings[2]) * 
+            args.prof_settings[3]
+        ) and args.profiling:
             prof.step()
 
     experiment_data_plots(root_dir=log_save_dir, out_dir=plots_save_dir)

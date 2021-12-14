@@ -1,19 +1,20 @@
 
-import torch
-import numpy as np
-
-from tqdm import tqdm
+from statistics import mean
 from typing import List, Tuple
-from torch.utils.data import DataLoader
+
+import numpy as np
+import torch
 from sklearn.neighbors import KernelDensity
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 
 def autoanchors(
-    dataloader: DataLoader, 
-    n_anchors: int = 5, 
-    outlier_segment: float = 1e-2, 
-    bandwidth: float = 1e-1, 
-    outlier_threshold: float = 1e-1
+    dataloader: DataLoader,
+    n_anchors: int = 5,
+    outlier_segment: float = 1e-2,
+    bandwidth: float = 1e-1,
+    outlier_threshold: float = .0
 ) -> Tuple[List[float], List[float]]:
     # parse box areas and register anchors
     anchors, aspects, init_flag = None, None, True
@@ -39,20 +40,26 @@ def autoanchors(
     anchors = anchors[:, np.newaxis]
     aspects = aspects[:, np.newaxis]
 
-    # anchor_universe = np.linspace(np.amin(anchors), np.amax(
-    #     anchors), np.prod(anchors.shape) * 10)[:, np.newaxis]
-    # aspect_universe = np.linspace(np.amin(aspects), np.amax(
-    #     aspects), np.prod(aspects.shape) * 10)[:, np.newaxis]
-    
+    anchor_raw_n_samples = anchors.shape[0]
+    aspect_raw_n_samples = aspects.shape[0]
+
     anchor_kde = KernelDensity(
         kernel="epanechnikov", bandwidth=bandwidth).fit(anchors)
     anchor_log_dens = anchor_kde.score_samples(anchors)
-    anchor_mask = (np.exp(anchor_log_dens) < outlier_threshold)
+    anchor_scores = np.exp(anchor_log_dens)
 
     aspect_kde = KernelDensity(
         kernel="epanechnikov", bandwidth=bandwidth).fit(aspects)
     aspect_log_dens = aspect_kde.score_samples(aspects)
-    aspect_mask = (np.exp(aspect_log_dens) < outlier_threshold)
+    aspect_scores = np.exp(aspect_log_dens)
+
+    anchor_scores = np.interp(
+        anchor_scores, (anchor_scores.min(), anchor_scores.max()), (-1, +1))
+    aspect_scores = np.interp(
+        aspect_scores, (aspect_scores.min(), aspect_scores.max()), (-1, +1))
+
+    anchor_mask = anchor_scores > outlier_threshold
+    aspect_mask = aspect_scores > outlier_threshold
 
     # remove outliers
     anchors = anchors[anchor_mask]
@@ -63,24 +70,33 @@ def autoanchors(
     aspects = np.sort(aspects, axis=None)
 
     # configure buckets
-    n_samples = anchors.shape[0]
-    bucket_size = n_samples // (n_anchors - 1)
+    n_anchor_samples = anchors.shape[0]
+    anchor_bucket_size = n_anchor_samples // (n_anchors - 1)
+
+    n_aspect_samples = aspects.shape[0]
+    aspect_bucket_size = n_aspect_samples // (n_anchors - 1)
 
     # Removing outliers
-    aspects = aspects[:int(n_samples * (1 - outlier_segment))]
-    aspects = aspects[int(n_samples * outlier_segment):]
-    anchors = anchors[:int(n_samples * (1 - outlier_segment))]
-    anchors = anchors[int(n_samples * outlier_segment):]
+    aspects = aspects[:int(n_aspect_samples * (1 - outlier_segment))]
+    aspects = aspects[int(n_aspect_samples * outlier_segment):]
+    anchors = anchors[:int(n_anchor_samples * (1 - outlier_segment))]
+    anchors = anchors[int(n_anchor_samples * outlier_segment):]
+
+    anchor_filtered_n_samples = anchors.shape[0]
+    aspect_filtered_n_samples = aspects.shape[0]
+
+    print(f"\nRemoved {anchor_raw_n_samples - anchor_filtered_n_samples} samples out of {anchor_raw_n_samples} from anchor candidates.")
+    print(f"Removed {aspect_raw_n_samples - aspect_filtered_n_samples} samples out of {aspect_raw_n_samples} from aspect candidates.\n")
 
     # estimate best anchor sizes
     anchor_sizes = []
     aspect_ratios = []
     aspect_ratios.append(np.around(aspects[0], decimals=2))
     for bucket in range(n_anchors - 1):
-        anchor_segment = anchors[bucket_size *
-                                 bucket:bucket_size * (bucket + 1)]
-        aspect_segment = aspects[bucket_size *
-                                 bucket:bucket_size * (bucket + 1)]
+        anchor_segment = anchors[anchor_bucket_size *
+                                 bucket:anchor_bucket_size * (bucket + 1)]
+        aspect_segment = aspects[aspect_bucket_size *
+                                 bucket:aspect_bucket_size * (bucket + 1)]
 
         if bucket < (n_anchors - 1) - 1:
             anchor_sizes.append(np.rint(np.mean(anchor_segment)))
@@ -97,5 +113,10 @@ def autoanchors(
     aspect_ratios = np.array(aspect_ratios)
     aspect_ratios = np.around(np.linspace(start=np.min(
         aspect_ratios), stop=np.max(aspect_ratios), num=5), decimals=2)
+
+    if mean(anchor_sizes) < 6.0:
+        print(f"WARNING: You should consider increasing "
+              f"`img_size` hyperparameter to gain more "
+              f"prediction accuracy.")
 
     return anchor_sizes, aspect_ratios

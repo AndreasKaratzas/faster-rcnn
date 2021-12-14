@@ -5,7 +5,7 @@ import time
 import torch
 import numpy as np
 import torchvision
-
+from apex import amp
 from tqdm import tqdm
 from random import random
 from statistics import mean
@@ -34,15 +34,16 @@ def train(
     model: torch.nn.Module, 
     optimizer: torch.optim.Optimizer, 
     dataloader: torch.utils.data.DataLoader, 
+    tb_dataloader: torch.utils.data.DataLoader,
     device: torch.device,
     epochs: int,
     epoch: int, 
     log_filepath: str,
     writer: object,
-    confirm: bool = True,
+    apex_activated: bool,
     sample: float = 0.1,
     num_classes: int = 12,
-    no_visual: bool = True, 
+    no_visual: bool = False, 
     no_save: bool = True,
     res_dir: str = ''
 ):
@@ -51,31 +52,37 @@ def train(
     metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
 
     # training dataloader
-    if confirm and epoch==0:
+    if not no_visual and epoch == 0:
         if sample > 1.0 or sample < 0.0:
             raise ValueError(f"Option `sample` was not between [0, 1]. Input value was {sample}.")
         visualize = VisualTest(num_classes=num_classes, res_dir=res_dir)
         
         sample_num = 0
         grid = []
-        for images, targets in dataloader:
-            if random() < sample:
-                for image, target in zip(images, targets):
 
-                    if target['boxes'].ndim < 1:
-                        target['boxes'] = target['boxes'].unsqueeze(0)
-                    
-                    sample_image = visualize.visualize(
-                        img=image * 255, boxes=target['boxes'], labels=target['labels'], 
-                        no_visual=no_visual, no_save=no_save)
+        for images, targets in tqdm(
+            iterable=tb_dataloader, 
+            total=len(tb_dataloader), 
+            bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}',
+            unit=' batches',
+            desc='Configuring batch visualization in tensorboard'
+        ):
+            for image, target in zip(images, targets):
 
-                    grid.append(sample_image)
+                if target['boxes'].ndim < 1:
+                    target['boxes'] = target['boxes'].unsqueeze(0)
+                
+                sample_image = visualize.visualize(
+                    img=image * 255, boxes=target['boxes'], labels=target['labels'], 
+                    no_visual=True, no_save=no_save)
 
-                    if len(grid) == 4:
-                        grid = torchvision.utils.make_grid(grid)
-                        writer.add_image('batch_' + str(sample_num), grid, 0)
-                        sample_num += 1
-                        grid = []
+                grid.append(sample_image)
+
+                if len(grid) == 4:
+                    grid = torchvision.utils.make_grid(grid)
+                    writer.add_image('batch_' + str(sample_num), grid, 0)
+                    sample_num += 1
+                    grid = []
     
     # Define loss accumulators for statistics
     loss_acc = []
@@ -84,7 +91,8 @@ def train(
     loss_objectness_acc = []
     loss_rpn_box_reg_acc = []
 
-    print(f"\t{'Epoch':10}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
+    print(
+        f"\n\n\t{'Epoch':10}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
     with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
         for images, targets in metric_logger.log_every(dataloader, epoch + 1):
             images = list(image.to(device) for image in images)
@@ -105,9 +113,17 @@ def train(
                 print(loss_dict_reduced)
                 sys.exit(1)
 
+            blockPrint()
             optimizer.zero_grad()
-            losses.backward()
+            
+            if apex_activated:
+                with amp.scale_loss(losses, optimizer) as scaled_loss:
+                    scaled_loss.backward()
+            else:
+                losses.backward()
+
             optimizer.step()
+            enablePrint()
             
             metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
