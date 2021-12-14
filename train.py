@@ -147,10 +147,9 @@ if __name__ == "__main__":
                 print(f"Disabling apex software for mixed-precision model training.")
                 args.no_mixed_precision = True
     
-    if not args.no_mixed_precision:
-        cuda_arch = cuda_check()
-        print(f"Found NVIDIA GPU of {cuda_arch} Architecture.")
-        print(f"Enabling apex software for mixed-precision model training.")
+        if not args.no_mixed_precision:
+            print(f"Found NVIDIA GPU of {cuda_arch} Architecture.")
+            print(f"Enabling apex software for mixed-precision model training.")
 
     # training dataset
     train_data = CustomCachedDetectionDataset(
