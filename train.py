@@ -47,7 +47,7 @@ if __name__ == "__main__":
                         help='Number of classes in dataset including background.')
     parser.add_argument('--backbone', default='resnet50', type=str,
                         help='Backbone CNN for Faster R-CNN (default: resnet50).')
-    parser.add_argument('--batch-size', default=4, type=int,
+    parser.add_argument('--batch-size', default=16, type=int,
                         help='Batch size (default: 16).')
     parser.add_argument('--epochs', default=2, type=int, metavar='N',
                         help='Number of total epochs to run (default: 100).')
@@ -62,7 +62,7 @@ if __name__ == "__main__":
     parser.add_argument('--resume', type=str, default=None,
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
     parser.add_argument('--cache', default=False, action='store_true',
-                        help='Cache the images found in the dataset (default: True).')
+                        help='Cache the images found in the dataset (default: False).')
     parser.add_argument('--profiling', default=False, action='store_true',
                         help='Profile the training loop (default: False).')
     parser.add_argument('--prof-settings', default=[
