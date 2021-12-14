@@ -1,7 +1,6 @@
 
 import os
 import glob
-from matplotlib.pyplot import figure
 import torch
 import hashlib
 import numpy as np
@@ -78,7 +77,7 @@ def _verify_lbl2img_path(args):
             f"Image and/or label file is corrupt regarding sample with ID {Path(img_file).stem}.")
 
 
-def _load_image(self, img_idx: int):
+def _load_image(self, img_idx: int, cached: bool = False):
     """Processes the `images` attribute of `CustomDetectionDataset` object
 
     Parameters
@@ -86,11 +85,11 @@ def _load_image(self, img_idx: int):
     img_idx : int
         [description]
     """
-    try:
+    if cached:
         img = self.images[img_idx]
         # check if img exists in cache
         return self.images[img_idx]
-    except:
+    else:
         # fetch if it does not exist
         img_path = self.img_files[img_idx]
         # load image sample
@@ -185,35 +184,23 @@ class CustomCachedDetectionDataset(Dataset):
         _allocated_mem = 0
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
-            _results = ThreadPool(self.num_threads).map(
+            _results = ThreadPool(self.num_threads).imap(
                 lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
             # keep user informed with a TQDM bar
             pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
-            # first sample flag
-            first_flag = True
-            # declare per image memory requirements variable
-            sample_mem_space = 0
             # loop through samples
             for image_idx, image_sample in pbar:
                 # cache image
                 self.images[image_idx] = image_sample
                 # update allocated memory register
-                if first_flag:
-                    sample_mem_space = np.asarray(
-                        self.images[image_idx]).nbytes
-                    first_flag = False
-                _allocated_mem += sample_mem_space
+                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
                 # update RAM status
-                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
+                pbar.desc = f"Caching images ({_allocated_mem / 1E9: .3f}GB RAM)"
             pbar.close()
         else:
             # keep user informed with a TQDM bar
             pbar = tqdm(range(self.num_samples), total=self.num_samples,
                         unit=" samples processed")
-            # first sample flag
-            first_flag = True
-            # declare per image memory requirements variable
-            sample_mem_space = 0
             # initialize single threaded image fetching operation
             for image_idx in pbar:
                 # fetch if it does not exist
@@ -227,11 +214,7 @@ class CustomCachedDetectionDataset(Dataset):
                 # cache image
                 self.images[image_idx] = img
                 # update allocated memory register
-                if first_flag:
-                    sample_mem_space = np.asarray(
-                        self.images[image_idx]).nbytes
-                    first_flag = False
-                _allocated_mem += sample_mem_space
+                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
                 # update RAM status
                 pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
             pbar.close()
@@ -260,7 +243,7 @@ class CustomCachedDetectionDataset(Dataset):
             self._cache_images()
 
     def __getitem__(self, idx):
-        img = _load_image(self, idx)
+        img = _load_image(self, idx, cached=self.cache_images_flag)
         
         boxes = self.labels[idx]
         boxes = torch.as_tensor(boxes, dtype=torch.float64)
