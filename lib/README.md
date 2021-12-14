@@ -1,6 +1,7 @@
 # TODO
 
 * Fix anchor sizes suggestion (use (anchors.max - anchors.min) / anchors.min < 6.0 and anchors.min < 4.0 )  
+* Inform user of enabled Apex software better
 * Colors in messages
 * Note in README that there was an attempt to embed torch.jit in transforms but the process was too complicated and the documentation too little.
 * Add a "Help needed" section or a "Contribute" one with 2 issues:

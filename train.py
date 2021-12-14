@@ -1,4 +1,7 @@
 
+import matplotlib
+matplotlib.use('TKAgg')
+
 import argparse
 import datetime
 import json
