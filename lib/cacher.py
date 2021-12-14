@@ -1,7 +1,7 @@
 
 import os
-import cv2
 import glob
+from matplotlib.pyplot import figure
 import torch
 import hashlib
 import numpy as np
@@ -12,12 +12,7 @@ from pathlib import Path
 from itertools import repeat
 from PIL import Image, ImageOps
 from torch.utils.data import Dataset
-
-from torch.multiprocessing import Pool, Process, set_start_method
-try:
-    set_start_method('spawn')
-except RuntimeError:
-    pass
+from multiprocessing.pool import Pool, ThreadPool
 
 from lib.presets import DetectionPresetImageOnlyTorchVision, DetectionPresetTargetOnlyTorchVision
 
@@ -99,11 +94,9 @@ def _load_image(self, img_idx: int):
         # fetch if it does not exist
         img_path = self.img_files[img_idx]
         # load image sample
-        # img = Image.open(img_path).convert("RGB")
-        img = Image.open(img_path)
+        img = Image.open(img_path).convert("RGB")
         # reduce image dimensions
-        # img = self.reduce_image(img=img)
-        img = img.resize((self.img_size, self.img_size), Image.NEAREST)
+        img = self.reduce_image(img=img)
         # assert error if image was not found
         assert img is not None, f'Image Not Found {img_path}'
         # return result
@@ -192,33 +185,35 @@ class CustomCachedDetectionDataset(Dataset):
         _allocated_mem = 0
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
-            with Pool(self.num_threads) as pool:
-                # map the processes accross the declared workers
-                _results = pool.map(
-                    lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
-                # keep user informed with a TQDM bar
-                pbar = tqdm(enumerate(_results),
-                            total=self.num_samples, unit=" samples processed")
-
-            # # initialize multithreaded image fetching operation
-            # _results = ThreadPool(self.num_threads).map(
-            #     lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
-            # # keep user informed with a TQDM bar
-            # pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
-
-                # loop through samples
-                for image_idx, image_sample in pbar:
-                    # cache image
-                    self.images[image_idx] = image_sample
-                    # update allocated memory register
-                    _allocated_mem += np.asarray(self.images[image_idx]).nbytes
-                    # update RAM status
-                    pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
-                pbar.close()
+            _results = ThreadPool(self.num_threads).map(
+                lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
+            # keep user informed with a TQDM bar
+            pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
+            # first sample flag
+            first_flag = True
+            # declare per image memory requirements variable
+            sample_mem_space = 0
+            # loop through samples
+            for image_idx, image_sample in pbar:
+                # cache image
+                self.images[image_idx] = image_sample
+                # update allocated memory register
+                if first_flag:
+                    sample_mem_space = np.asarray(
+                        self.images[image_idx]).nbytes
+                    first_flag = False
+                _allocated_mem += sample_mem_space
+                # update RAM status
+                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
+            pbar.close()
         else:
             # keep user informed with a TQDM bar
             pbar = tqdm(range(self.num_samples), total=self.num_samples,
                         unit=" samples processed")
+            # first sample flag
+            first_flag = True
+            # declare per image memory requirements variable
+            sample_mem_space = 0
             # initialize single threaded image fetching operation
             for image_idx in pbar:
                 # fetch if it does not exist
@@ -232,7 +227,11 @@ class CustomCachedDetectionDataset(Dataset):
                 # cache image
                 self.images[image_idx] = img
                 # update allocated memory register
-                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
+                if first_flag:
+                    sample_mem_space = np.asarray(
+                        self.images[image_idx]).nbytes
+                    first_flag = False
+                _allocated_mem += sample_mem_space
                 # update RAM status
                 pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
             pbar.close()
