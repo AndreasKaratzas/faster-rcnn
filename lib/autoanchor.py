@@ -114,7 +114,8 @@ def autoanchors(
     aspect_ratios = np.around(np.linspace(start=np.min(
         aspect_ratios), stop=np.max(aspect_ratios), num=5), decimals=2)
 
-    if mean(anchor_sizes) < 6.0:
+    if max(anchor_sizes) - min(anchor_sizes) < 10.0 or min(anchor_sizes) < 4.0:
+
         print(f"WARNING: You should consider increasing "
               f"`img_size` hyperparameter to gain more "
               f"prediction accuracy.")

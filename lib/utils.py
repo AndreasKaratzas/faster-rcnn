@@ -56,9 +56,7 @@ def weight_histograms_linear(writer, step, weights, layer_number):
 
 def weight_histograms(writer, step, model):
     # Iterate over all model layers
-    for layer_number in range(len(model.layers)):
-        # Get layer
-        layer = model.layers[layer_number]
+    for layer_number, layer in enumerate(model.modules()):
         # Compute weight histograms for appropriate layer
         if isinstance(layer, nn.Conv2d):
             weights = layer.weight
