@@ -95,7 +95,7 @@ def _load_image(self, img_idx: int, cached: bool = False):
         # load image sample
         img = Image.open(img_path).convert("RGB")
         # reduce image dimensions
-        img = self.reduce_image(img=img)
+        img = img.resize((self.img_size, self.img_size), Image.NEAREST)
         # assert error if image was not found
         assert img is not None, f'Image Not Found {img_path}'
         # return result
@@ -185,7 +185,7 @@ class CustomCachedDetectionDataset(Dataset):
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
             _results = ThreadPool(self.num_threads).imap(
-                lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
+                lambda x: _load_image(*x), zip(repeat(self, self.num_samples), range(self.num_samples)))
             # keep user informed with a TQDM bar
             pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
             # loop through samples
