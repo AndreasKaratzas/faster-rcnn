@@ -49,7 +49,7 @@ if __name__ == "__main__":
                         help='Backbone CNN for Faster R-CNN (default: resnet50).')
     parser.add_argument('--batch-size', default=16, type=int,
                         help='Batch size (default: 16).')
-    parser.add_argument('--epochs', default=2, type=int, metavar='N',
+    parser.add_argument('--epochs', default=100, type=int, metavar='N',
                         help='Number of total epochs to run (default: 100).')
     parser.add_argument('--num-workers', default=8, type=int, metavar='N',
                         help='Number of data loading workers (default: 8).')
