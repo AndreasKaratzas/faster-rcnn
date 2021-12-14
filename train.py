@@ -1,6 +1,6 @@
 
 import matplotlib
-matplotlib.use('TKAgg')
+matplotlib.use('ggplot')
 
 import argparse
 import datetime

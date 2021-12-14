@@ -16,7 +16,7 @@ class Visual():
     def __init__(self, model: torch.nn.Module, root_dir: str, device: torch.device, conf_threshold: float, num_classes: int = 12):
         super().__init__()
 
-        matplotlib.use('TkAgg')
+        matplotlib.use('ggplot')
         plt.rcParams["savefig.bbox"] = 'tight'
 
         self.model = model
@@ -98,7 +98,7 @@ class VisualTest():
     def __init__(self, num_classes: int = 12, res_dir: str = './results'):
         super().__init__()
 
-        matplotlib.use('TkAgg')
+        matplotlib.use('ggplot')
         plt.rcParams["savefig.bbox"] = 'tight'
 
         self.img_cntr = 0
