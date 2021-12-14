@@ -12,7 +12,12 @@ from pathlib import Path
 from itertools import repeat
 from PIL import Image, ImageOps
 from torch.utils.data import Dataset
-from multiprocessing.pool import Pool, ThreadPool
+
+from torch.multiprocessing import Pool, Process, set_start_method
+try:
+    set_start_method('spawn')
+except RuntimeError:
+    pass
 
 from lib.presets import DetectionPresetImageOnlyTorchVision, DetectionPresetTargetOnlyTorchVision
 
@@ -187,19 +192,29 @@ class CustomCachedDetectionDataset(Dataset):
         _allocated_mem = 0
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
-            _results = ThreadPool(self.num_threads).map(
-                lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
-            # keep user informed with a TQDM bar
-            pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
-            # loop through samples
-            for image_idx, image_sample in pbar:
-                # cache image
-                self.images[image_idx] = image_sample
-                # update allocated memory register
-                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
-                # update RAM status
-                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
-            pbar.close()
+            with Pool(self.num_threads) as pool:
+                # map the processes accross the declared workers
+                _results = pool.map(
+                    lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
+                # keep user informed with a TQDM bar
+                pbar = tqdm(enumerate(_results),
+                            total=self.num_samples, unit=" samples processed")
+
+            # # initialize multithreaded image fetching operation
+            # _results = ThreadPool(self.num_threads).map(
+            #     lambda x: _load_image(*x), zip(repeat(self), range(self.num_samples)))
+            # # keep user informed with a TQDM bar
+            # pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
+
+                # loop through samples
+                for image_idx, image_sample in pbar:
+                    # cache image
+                    self.images[image_idx] = image_sample
+                    # update allocated memory register
+                    _allocated_mem += np.asarray(self.images[image_idx]).nbytes
+                    # update RAM status
+                    pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
+                pbar.close()
         else:
             # keep user informed with a TQDM bar
             pbar = tqdm(range(self.num_samples), total=self.num_samples,
