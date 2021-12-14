@@ -13,7 +13,7 @@ from PIL import Image, ImageOps
 from torch.utils.data import Dataset
 from multiprocessing.pool import Pool, ThreadPool
 
-from lib.presets import DetectionPresetImageOnlyTorchVision, DetectionPresetTargetOnlyTorchVision
+from lib.presets import DetectionPresetTargetOnlyTorchVision
 
 
 IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
@@ -110,8 +110,6 @@ class CustomCachedDetectionDataset(Dataset):
         self.batch_size = batch_size
         self.img_size = img_size
         self.cache_images_flag = cache_images_flag
-        self.reduce_image = DetectionPresetImageOnlyTorchVision(
-            img_size=self.img_size)
         self.reduce_target = DetectionPresetTargetOnlyTorchVision(
             img_size=self.img_size)
         

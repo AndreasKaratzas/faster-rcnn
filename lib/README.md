@@ -1,6 +1,5 @@
 # TODO
 
-* Make image caching faster
 * Colors in messages
 * Add docstrings
 * Add an `experiments` script with all experiments run to counter YOLOv5
