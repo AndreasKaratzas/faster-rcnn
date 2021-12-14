@@ -1,5 +1,6 @@
 
 import os
+import cv2
 import glob
 import torch
 import hashlib
@@ -93,9 +94,13 @@ def _load_image(self, img_idx: int):
         # fetch if it does not exist
         img_path = self.img_files[img_idx]
         # load image sample
-        img = Image.open(img_path).convert("RGB")
+        # img = Image.open(img_path).convert("RGB")
+        img = cv2.imread(img_path)  # BGR
         # reduce image dimensions
-        img = self.reduce_image(img=img)
+        # img = self.reduce_image(img=img)
+        img = cv2.resize(img, (self.img_size, self.img_size),
+                         interpolation=cv2.INTER_NEAREST)
+        img = Image.fromarray(np.uint8(img)).convert('RGB')
         # assert error if image was not found
         assert img is not None, f'Image Not Found {img_path}'
         # return result

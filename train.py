@@ -370,7 +370,7 @@ if __name__ == "__main__":
 
         train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
             model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-            epoch=epoch, log_filepath=log_save_dir_train, writer=writer, num_classes=args.num_classes, apex_activated=not APEX_NOT_INSTALLED,
+            epoch=epoch, log_filepath=log_save_dir_train, writer=writer, num_classes=args.num_classes, apex_activated=not args.no_mixed_precision,
             no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir, tb_dataloader=dataloader_tb)
         train_logger.export_data()
 
@@ -400,8 +400,9 @@ if __name__ == "__main__":
         writer.add_scalar('Recall/validation',
                           val_metrics.get("Recall"), epoch)
 
-        # Visualize weight histograms
-        weight_histograms(writer, epoch, model)
+        if args.no_mixed_precision:
+            # Visualize weight histograms
+            weight_histograms(writer, epoch, model)
 
         lr_scheduler.step(val_metrics.get("mAP@.5"))
         elite_model_criterion.calculate_metrics(epoch=epoch + 1)
