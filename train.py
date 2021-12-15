@@ -417,7 +417,7 @@ if __name__ == "__main__":
                 'amp': amp.state_dict() if not args.no_mixed_precision else None
             }, os.path.join(model_save_dir, 'best.pt'))
 
-            if not args.no_onnx:
+            if not args.no_onnx and args.no_mixed_precision:
                 onnx_model = copy.deepcopy(model)
                 onnx_model.to('cpu')
 
@@ -469,7 +469,7 @@ if __name__ == "__main__":
             'amp': amp.state_dict() if not args.no_mixed_precision else None
         }, os.path.join(model_save_dir, 'last.pt'))
 
-        if not args.no_onnx:
+        if not args.no_onnx and args.no_mixed_precision:
             onnx_model = copy.deepcopy(model)
             onnx_model.to('cpu')
 
