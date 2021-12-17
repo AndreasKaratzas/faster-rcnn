@@ -10,6 +10,9 @@ faster-rcnn/
 # Apex
 apex/
 
+# Dataset
+datasets/
+
 # Distribution / packaging
 .Python
 build/
@@ -130,3 +133,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Exclude compressed files
+*.zip
+*.7z
+*.rar

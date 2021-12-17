@@ -1,8 +1,8 @@
 # TODO
 
+* Add an `experiments` script with all experiments run to counter YOLOv5
 * Colors in messages
 * Add docstrings
-* Add an `experiments` script with all experiments run to counter YOLOv5
 * Note in README that there was an attempt to embed torch.jit in transforms but the process was too complicated and the documentation too little.
 * Add a "Help needed" section or a "Contribute" one with 2 issues:
     - Test and report on distributed software
@@ -16,4 +16,5 @@
     - `cd apex`
     - `pip install -v --disable-pip-version-check --no-cache-dir ./`
 * `sudo apt-get install libtiff5-dev libjpeg8-dev libopenjp2-7-dev zlib1g-dev libfreetype6-dev liblcms2-dev libwebp-dev tcl8.6-dev tk8.6-dev python3-tk libharfbuzz-dev libfribidi-dev libxcb1-dev`  
-* Help needed with multiprocessing in Linux (also mention the error)
+* Help needed with multiprocessing in Linux (also mention the error).
+* Add to README notes that the profiling is not necessary since there is almost no part of customization involved in the model itself and that there is a huge amount of RAM space required. That's also one of the reasons that I have not managed to test it.

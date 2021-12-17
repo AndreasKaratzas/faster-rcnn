@@ -1,13 +1,28 @@
 
 import argparse
+import copy
 import datetime
 import json
-import copy
 import os
-import warnings
 import platform
+import warnings
 from pathlib import Path
+
 import torch
+import torch.optim as optim
+from torch.profiler import ProfilerActivity
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
+from lib.autoanchor import autoanchors
+from lib.cacher import CustomCachedDetectionDataset
+from lib.elitism import EliteModel
+from lib.engine import train, validate
+from lib.model import configure_model
+from lib.nvidia import cuda_check
+from lib.plots import experiment_data_plots
+from lib.utils import (TraceWrapper, collate_fn, get_transform,
+                       weight_histograms)
 
 APEX_NOT_INSTALLED = False
 try:
@@ -15,19 +30,6 @@ try:
 except ImportError:
     APEX_NOT_INSTALLED = True
 
-import torch.optim as optim
-from torch.utils.data import DataLoader
-from torch.profiler import ProfilerActivity
-
-from torch.utils.tensorboard import SummaryWriter
-from lib.autoanchor import autoanchors
-from lib.cacher import CustomCachedDetectionDataset
-from lib.elitism import EliteModel
-from lib.nvidia import cuda_check
-from lib.engine import train, validate
-from lib.model import configure_model
-from lib.plots import experiment_data_plots
-from lib.utils import collate_fn, get_transform, weight_histograms, TraceWrapper
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -77,7 +79,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
     parser.add_argument('--aspect-ratios', default=[
-                        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int, 
+                        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int,
                         help='Anchor ratios.')
     parser.add_argument('--no-autoanchor', action='store_true',
                         help='Disable anchor recommendation software.')
@@ -146,7 +148,7 @@ if __name__ == "__main__":
                 print(f"Found NVIDIA GPU of {cuda_arch} Architecture.")
                 print(f"Disabling apex software for mixed-precision model training.")
                 args.no_mixed_precision = True
-    
+
         if not args.no_mixed_precision:
             print(f"Found NVIDIA GPU of {cuda_arch} Architecture.")
             print(f"Enabling apex software for mixed-precision model training.")
@@ -201,9 +203,9 @@ if __name__ == "__main__":
         tb_idx = torch.randperm(len(train_data))[:int(len(train_data) * 1e-1)]
         tb_sampler = torch.utils.data.SubsetRandomSampler(tb_idx)
         dataloader_tb = DataLoader(
-            dataset=train_data, 
-            batch_size=1, 
-            shuffle=False, 
+            dataset=train_data,
+            batch_size=1,
+            shuffle=False,
             num_workers=args.num_workers,
             collate_fn=collate_fn,
             sampler=tb_sampler
@@ -290,10 +292,10 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-        
+
         if type(checkpoint['amp']) is not None:
             amp.load_state_dict(checkpoint['amp'])
-        
+
         args.start_epoch = checkpoint['epoch'] + 1
         print(
             f"Training model from checkpoint {args.resume}. Starting from epoch {args.start_epoch}.")
@@ -315,7 +317,7 @@ if __name__ == "__main__":
 
     # initialize best model criterion
     elite_model_criterion = EliteModel(data_dir=log_save_dir)
-    
+
     # initialize tensorboard instance
     writer = SummaryWriter(log_save_dir, comment=args.project)
 
@@ -324,8 +326,9 @@ if __name__ == "__main__":
         tb_model.eval()
         writer.add_graph(
             model=tb_model,
-            input_to_model=torch.rand([3, args.img_size, args.img_size]).unsqueeze(0), 
-            verbose=False, 
+            input_to_model=torch.rand(
+                [3, args.img_size, args.img_size]).unsqueeze(0),
+            verbose=False,
             use_strict_trace=True
         )
 
@@ -333,6 +336,8 @@ if __name__ == "__main__":
     model = model.to(device)
 
     if not args.no_mixed_precision:
+        print("RECOMMENDATION: Try training the model with mixed precision"
+              f" DISABLED except if your GPU really supports mixed precision.")
         # Wrap the model
         model, optimizer = amp.initialize(model, optimizer, opt_level='O2')
 
@@ -355,17 +360,28 @@ if __name__ == "__main__":
             record_shapes=True,
             with_stack=True)
 
+        print(f"WARNING: Profiling is not recommended since it slows down "
+              f"training and requires a large amount of RAM memory space.")
+
         prof.start()
+
+    if not args.no_mixed_precision and not args.no_onnx:
+        print(f"WARNING: Model will not be stored as a ONNX file because "
+              f"mixed precision is enabled.")
+
+    if not args.no_mixed_precision and args.generate_script_module:
+        print(f"WARNING: Model will not be stored as a JIT script module "
+              f"because mixed precision is enabled.")
 
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
 
         if (epoch >= (
-            args.prof_settings[0] + 
-            args.prof_settings[1] + 
-            args.prof_settings[2]) * 
-            args.prof_settings[3]
-        ) and args.profiling:
+                args.prof_settings[0] +
+                args.prof_settings[1] +
+                args.prof_settings[2]) *
+                args.prof_settings[3]
+                ) and args.profiling:
             prof.stop()
 
         train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
@@ -446,7 +462,7 @@ if __name__ == "__main__":
                     },
                     verbose=True
                 )
-            if args.generate_script_module:
+            if args.generate_script_module and args.no_mixed_precision:
                 model_copy = copy.deepcopy(model)
                 model_copy.to('cpu')
 
@@ -458,7 +474,8 @@ if __name__ == "__main__":
                 traced_script_module = torch.jit.trace(model_copy, example)
 
                 # Serializing script module to a file
-                traced_script_module.save(os.path.join(model_save_dir, 'traced_best.pt'))
+                traced_script_module.save(os.path.join(
+                    model_save_dir, 'traced_best.pt'))
 
         # save last model to disk
         torch.save({
@@ -498,8 +515,8 @@ if __name__ == "__main__":
                 },
                 verbose=True
             )
-        
-        if args.generate_script_module:
+
+        if args.generate_script_module and args.no_mixed_precision:
             model_copy = copy.deepcopy(model)
             model_copy.to('cpu')
 
@@ -515,11 +532,11 @@ if __name__ == "__main__":
                 model_save_dir, 'traced_last.pt'))
 
         if (epoch < (
-            args.prof_settings[0] + 
-            args.prof_settings[1] + 
-            args.prof_settings[2]) * 
-            args.prof_settings[3]
-        ) and args.profiling:
+                args.prof_settings[0] +
+                args.prof_settings[1] +
+                args.prof_settings[2]) *
+                args.prof_settings[3]
+                ) and args.profiling:
             prof.step()
 
     experiment_data_plots(root_dir=log_save_dir, out_dir=plots_save_dir)

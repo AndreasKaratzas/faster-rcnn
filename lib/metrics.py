@@ -152,7 +152,6 @@ class MetricLogger(object):
                 float(str(self.meters[key]).split()[0]), 3)
 
         return \
-            self.stats.get('lr'),             \
             self.stats.get('loss'),           \
             self.stats.get('loss_classifier'),\
             self.stats.get('loss_box_reg'),   \
