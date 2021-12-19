@@ -149,6 +149,7 @@ class CustomCachedDetectionDataset(Dataset):
                     lbl = self.reduce_target(
                         target=lbl, height=height, width=width)
                     # avoid invalid boxes
+                    print(lbl)
                     lbl[2] += 1
                     lbl[3] += 1
                     # record targets or message indicating a failure in the parsing process
@@ -166,6 +167,7 @@ class CustomCachedDetectionDataset(Dataset):
                 lbl = self.reduce_target(
                     target=lbl, height=height, width=width)
                 # avoid invalid boxes
+                print(lbl)
                 lbl[2] += 1
                 lbl[3] += 1
                 # record targets or message indicating a failure in the parsing process
