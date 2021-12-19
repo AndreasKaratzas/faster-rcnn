@@ -217,8 +217,15 @@ if __name__ == "__main__":
 
     # autoanchor software
     if not args.no_autoanchor:
+        dataloader_auto = DataLoader(
+            dataset=val_data,
+            batch_size=1,
+            shuffle=False,
+            num_workers=args.num_workers,
+            collate_fn=collate_fn
+        )
         args.anchor_sizes, args.aspect_ratios = autoanchors(
-            dataloader=dataloader_valid)
+            dataloader=dataloader_auto)
         print(
             f"\nSetting the following hyperparameters to the recommended values:\n\t"
             f"Anchor sizes:\t{args.anchor_sizes}\n\tAspect ratios:\t{args.aspect_ratios}\n\n"
