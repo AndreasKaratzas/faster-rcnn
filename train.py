@@ -226,9 +226,9 @@ if __name__ == "__main__":
 
     print(
         f'Training Faster R-CNN for {args.epochs} epoch(s) with model backbone {args.backbone} with:\n'
-        f'\t{args.trainable_layers}\t\t\t\ttrainable layer(s)\n'
-        f'\t{args.anchor_sizes}\tanchor sizes and\n'
-        f'\t{args.aspect_ratios}\taspect ratios\n\nDataset stats:\n'
+        f'\t{args.trainable_layers}\t\t\t\t\ttrainable layer(s)\n'
+        f'\t{args.anchor_sizes}\t\tanchor sizes and\n'
+        f'\t{args.aspect_ratios}\t\taspect ratios\n\nDataset stats:\n'
         f'\tLength of train data:\t\t{len(train_data):5d}\n'
         f'\tLength of validation data:\t{len(val_data):5d}\n\n')
 

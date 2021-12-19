@@ -148,6 +148,9 @@ class CustomCachedDetectionDataset(Dataset):
                     # reduce target dimensions w.r.t. image dimensionality reduction ratio
                     lbl = self.reduce_target(
                         target=lbl, height=height, width=width)
+                    # avoid invalid boxes
+                    lbl[2] += 1
+                    lbl[3] += 1
                     # record targets or message indicating a failure in the parsing process
                     if img_file:
                         x[img_file] = lbl
@@ -162,6 +165,9 @@ class CustomCachedDetectionDataset(Dataset):
                 # reduce target dimensions w.r.t. image dimensionality reduction ratio
                 lbl = self.reduce_target(
                     target=lbl, height=height, width=width)
+                # avoid invalid boxes
+                lbl[2] += 1
+                lbl[3] += 1
                 # record targets or message indicating a failure in the parsing process
                 if img_file:
                     x[img_file] = lbl
