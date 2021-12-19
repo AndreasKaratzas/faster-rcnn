@@ -343,7 +343,7 @@ if __name__ == "__main__":
         print("RECOMMENDATION: Try training the model with mixed precision"
               f" DISABLED except if your GPU really supports mixed precision.")
         # Wrap the model
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O2')
+        model, optimizer = amp.initialize(model, optimizer, opt_level='O3')
 
     # profile the model
     prof = None
