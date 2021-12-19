@@ -76,8 +76,6 @@ class Visual():
             
             # Feed input to model
             outputs = self.model(batch)
-
-            print(outputs)
             
             # Build image with predicted boxes
             vis_result = [
@@ -106,7 +104,7 @@ class VisualTest():
 
         self.colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
                        for i in range(self.num_classes)]
-        print(self.colors)
+
     def generate_pil_colors(self, labels: List[int]):
         return [self.colors[label] for label in range(len(labels))]
 
