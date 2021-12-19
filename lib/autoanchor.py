@@ -12,9 +12,9 @@ from tqdm import tqdm
 def autoanchors(
     dataloader: DataLoader,
     n_anchors: int = 5,
-    outlier_segment: float = 1e-2,
-    bandwidth: float = 1e-1,
-    outlier_threshold: float = .0
+    outlier_segment: float = 5e-2,
+    bandwidth: float = 7e-1,
+    outlier_threshold: float = -95e-2
 ) -> Tuple[List[float], List[float]]:
     # parse box areas and register anchors
     anchors, aspects, init_flag = None, None, True

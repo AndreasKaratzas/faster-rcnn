@@ -41,7 +41,7 @@ def train(
     log_filepath: str,
     writer: object,
     apex_activated: bool,
-    sample: float = 0.1,
+    sample: float = 0.01,
     num_classes: int = 12,
     no_visual: bool = False, 
     no_save: bool = True,

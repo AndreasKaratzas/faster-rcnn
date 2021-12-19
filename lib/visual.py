@@ -5,6 +5,7 @@ from typing import List
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import random
 import torchvision.transforms.functional as F
 from PIL import ImageColor
 from torchvision.transforms.functional import convert_image_dtype
@@ -22,13 +23,14 @@ class Visual():
         self.device = device
         self.conf_threshold = conf_threshold
         self.num_classes = num_classes
-        self.colors = list(sorted(ImageColor.colormap.items()))[
-            :self.num_classes]
+
+        self.colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+                 for i in range(self.num_classes)]
         # enter evaluation mode
         self.model.eval()
 
     def generate_pil_colors(self, labels: List[int]):
-        return [self.colors[sample][0] for sample in labels]
+        return [self.colors[sample] for sample in labels]
 
     def show(self, img_set):
         if not isinstance(img_set, list):

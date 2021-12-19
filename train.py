@@ -3,6 +3,7 @@ import argparse
 import copy
 import datetime
 import json
+import math
 import os
 import platform
 import warnings
@@ -200,7 +201,10 @@ if __name__ == "__main__":
 
     dataloader_tb = None
     if not args.no_visual:
-        tb_idx = torch.randperm(len(train_data))[:int(len(train_data) * 1e-1)]
+        args.sample_ratio = 1e-2
+        print(f"Sampling {args.sample_ratio} percent of training images.")
+        tb_idx = torch.randperm(len(train_data))[
+            :math.ceil(len(train_data) * args.sample_ratio)]
         tb_sampler = torch.utils.data.SubsetRandomSampler(tb_idx)
         dataloader_tb = DataLoader(
             dataset=train_data,
@@ -385,7 +389,7 @@ if __name__ == "__main__":
             prof.stop()
 
         train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
-            model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
+            model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs, sample=args.sample_ratio if not args.no_visual else .0,
             epoch=epoch, log_filepath=log_save_dir_train, writer=writer, num_classes=args.num_classes, apex_activated=not args.no_mixed_precision,
             no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir, tb_dataloader=dataloader_tb)
         train_logger.export_data()
