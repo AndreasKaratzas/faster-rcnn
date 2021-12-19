@@ -104,11 +104,11 @@ class VisualTest():
         self.num_classes = num_classes
         self.results_dir = res_dir
 
-        self.colors = list(sorted(ImageColor.colormap.items()))[
-            :self.num_classes]
+        self.colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+                       for i in range(self.num_classes)]
     
     def generate_pil_colors(self, labels: List[int]):
-        return [self.colors[sample][0] for sample in labels]
+        return [self.colors[sample] for sample in labels]
 
     def draw_bboxes(self, img: np.ndarray, boxes: torch.Tensor, labels: List[int], line_width: int = 3):
         return draw_bounding_boxes(img, boxes, colors=self.generate_pil_colors(labels), width=line_width)
