@@ -77,7 +77,7 @@ def _verify_lbl2img_path(args):
             f"Image and/or label file is corrupt regarding sample with ID {Path(img_file).stem}.")
 
 
-def _load_image(self, img_idx: int, cached: bool = False):
+def _load_image(self, img_idx: int):
     """Processes the `images` attribute of `CustomDetectionDataset` object
 
     Parameters
@@ -85,9 +85,8 @@ def _load_image(self, img_idx: int, cached: bool = False):
     img_idx : int
         [description]
     """
-    if cached:
-        img = self.images[img_idx]
-        # check if img exists in cache
+    if self.images[img_idx] is not None:
+        # if img exists in cache
         return self.images[img_idx]
     else:
         # fetch if it does not exist
@@ -199,7 +198,7 @@ class CustomCachedDetectionDataset(Dataset):
                 # update allocated memory register
                 _allocated_mem += np.asarray(self.images[image_idx]).nbytes
                 # update RAM status
-                pbar.desc = f"Caching images ({_allocated_mem / 1E9: .3f}GB RAM)"
+                pbar.desc = f"Caching images ({_allocated_mem / 1E9: .3f} GB RAM)"
             pbar.close()
         else:
             # keep user informed with a TQDM bar
@@ -220,7 +219,7 @@ class CustomCachedDetectionDataset(Dataset):
                 # update allocated memory register
                 _allocated_mem += np.asarray(self.images[image_idx]).nbytes
                 # update RAM status
-                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f}GB RAM)"
+                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f} GB RAM)"
             pbar.close()
 
 
@@ -247,7 +246,7 @@ class CustomCachedDetectionDataset(Dataset):
             self._cache_images()
 
     def __getitem__(self, idx):
-        img = _load_image(self, idx, cached=self.cache_images_flag)
+        img = _load_image(self, idx)
         
         boxes = self.labels[idx]
         boxes = torch.as_tensor(boxes, dtype=torch.float64)

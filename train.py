@@ -11,9 +11,11 @@ from pathlib import Path
 
 import torch
 import torch.optim as optim
+import torchvision
 from torch.profiler import ProfilerActivity
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
 from lib.autoanchor import autoanchors
 from lib.cacher import CustomCachedDetectionDataset
@@ -24,6 +26,7 @@ from lib.nvidia import cuda_check
 from lib.plots import experiment_data_plots
 from lib.utils import (TraceWrapper, collate_fn, get_transform,
                        weight_histograms)
+from lib.visual import VisualTest
 
 APEX_NOT_INSTALLED = False
 try:
@@ -192,40 +195,18 @@ if __name__ == "__main__":
     # validation dataloader
     dataloader_valid = DataLoader(
         dataset=val_data,
-        batch_size=args.batch_size * 2,
+        batch_size=1,
         shuffle=False,
         num_workers=args.num_workers,
         collate_fn=collate_fn,
         pin_memory=True
     )
 
-    dataloader_tb = None
-    if not args.no_visual:
-        args.sample_ratio = 1e-2
-        print(f"Sampling {args.sample_ratio} percent of training images.")
-        tb_idx = torch.randperm(len(train_data))[
-            :math.ceil(len(train_data) * args.sample_ratio)]
-        tb_sampler = torch.utils.data.SubsetRandomSampler(tb_idx)
-        dataloader_tb = DataLoader(
-            dataset=train_data,
-            batch_size=1,
-            shuffle=False,
-            num_workers=args.num_workers,
-            collate_fn=collate_fn,
-            sampler=tb_sampler
-        )
 
     # autoanchor software
     if not args.no_autoanchor:
-        dataloader_auto = DataLoader(
-            dataset=val_data,
-            batch_size=1,
-            shuffle=False,
-            num_workers=args.num_workers,
-            collate_fn=collate_fn
-        )
         args.anchor_sizes, args.aspect_ratios = autoanchors(
-            dataloader=dataloader_auto)
+            dataloader=dataloader_valid)
         print(
             f"\nSetting the following hyperparameters to the recommended values:\n\t"
             f"Anchor sizes:\t{args.anchor_sizes}\n\tAspect ratios:\t{args.aspect_ratios}\n\n"
@@ -345,6 +326,56 @@ if __name__ == "__main__":
 
     # load model to device
     model = model.to(device)
+    
+    # optional dataset sample visualization
+    if not args.no_visual:
+        sample_ratio = 1e-2
+        n_samples = math.ceil(len(train_data) * sample_ratio)
+        if n_samples > 100:
+            n_samples = 100
+        print(f"Sampling {sample_ratio} percent of training images.")
+        tb_idx = torch.randperm(len(train_data))[:n_samples]
+        tb_sampler = torch.utils.data.SubsetRandomSampler(tb_idx)
+        dataloader_tb = DataLoader(
+            dataset=train_data,
+            batch_size=1,
+            shuffle=False,
+            num_workers=args.num_workers,
+            collate_fn=collate_fn,
+            sampler=tb_sampler
+        )
+
+        if not args.no_visual:
+            
+            visualize = VisualTest(
+                num_classes=args.num_classes, res_dir=gt_save_dir)
+
+            sample_num = 0
+            grid = []
+
+            for images, targets in tqdm(
+                iterable=dataloader_tb,
+                total=len(dataloader_tb),
+                bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}',
+                unit=' batches/sec.',
+                desc='Configuring batch visualization in tensorboard'
+            ):
+                for image, target in zip(images, targets):
+
+                    if target['boxes'].ndim < 1:
+                        target['boxes'] = target['boxes'].unsqueeze(0)
+
+                    sample_image = visualize.visualize(
+                        img=image * 255, boxes=target['boxes'], labels=target['labels'],
+                        no_visual=True, no_save=args.no_save)
+
+                    grid.append(sample_image)
+
+                    if len(grid) == 4:
+                        grid = torchvision.utils.make_grid(grid)
+                        writer.add_image('batch_' + str(sample_num), grid, 0)
+                        sample_num += 1
+                        grid = []
 
     if not args.no_mixed_precision:
         print("RECOMMENDATION: Try training the model with mixed precision"
@@ -392,13 +423,12 @@ if __name__ == "__main__":
                 args.prof_settings[1] +
                 args.prof_settings[2]) *
                 args.prof_settings[3]
-                ) and args.profiling:
+        ) and args.profiling:
             prof.stop()
 
         train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
-            model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs, sample=args.sample_ratio if not args.no_visual else .0,
-            epoch=epoch, log_filepath=log_save_dir_train, writer=writer, num_classes=args.num_classes, apex_activated=not args.no_mixed_precision,
-            no_visual=args.no_visual, no_save=args.no_save, res_dir=gt_save_dir, tb_dataloader=dataloader_tb)
+            model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
+            epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision)
         train_logger.export_data()
 
         writer.add_scalar('lr/train', lr, epoch)

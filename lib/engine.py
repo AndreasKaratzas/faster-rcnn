@@ -7,13 +7,12 @@ import numpy as np
 import torchvision
 from apex import amp
 from tqdm import tqdm
-from random import random
 from statistics import mean
 
 from coco.coco_utils import get_coco_api_from_dataset
-from lib.utils import reduce_dict, warmup_lr_scheduler, blockPrint, enablePrint
+from lib.utils import reduce_dict, blockPrint, enablePrint
 
-from lib.visual import VisualTest
+
 from coco.coco_eval import CocoEvaluator
 from lib.metrics import MetricLogger, SmoothedValue
 
@@ -33,56 +32,16 @@ def _get_iou_types(model):
 def train(
     model: torch.nn.Module, 
     optimizer: torch.optim.Optimizer, 
-    dataloader: torch.utils.data.DataLoader, 
-    tb_dataloader: torch.utils.data.DataLoader,
+    dataloader: torch.utils.data.DataLoader,
     device: torch.device,
     epochs: int,
     epoch: int, 
     log_filepath: str,
-    writer: object,
-    apex_activated: bool,
-    sample: float = 0.01,
-    num_classes: int = 12,
-    no_visual: bool = False, 
-    no_save: bool = True,
-    res_dir: str = ''
+    apex_activated: bool
 ):
     model.train()
     metric_logger = MetricLogger(f_path=log_filepath, delimiter="  ")
     metric_logger.add_meter('lr', SmoothedValue(window_size=1, fmt='{value:.6f}'))
-
-    # training dataloader
-    if not no_visual and epoch == 0:
-        if sample > 1.0 or sample < 0.0:
-            raise ValueError(f"Option `sample` was not between [0, 1]. Input value was {sample}.")
-        visualize = VisualTest(num_classes=num_classes, res_dir=res_dir)
-        
-        sample_num = 0
-        grid = []
-
-        for images, targets in tqdm(
-            iterable=tb_dataloader, 
-            total=len(tb_dataloader), 
-            bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}',
-            unit=' batches',
-            desc='Configuring batch visualization in tensorboard'
-        ):
-            for image, target in zip(images, targets):
-
-                if target['boxes'].ndim < 1:
-                    target['boxes'] = target['boxes'].unsqueeze(0)
-                
-                sample_image = visualize.visualize(
-                    img=image * 255, boxes=target['boxes'], labels=target['labels'], 
-                    no_visual=True, no_save=no_save)
-
-                grid.append(sample_image)
-
-                if len(grid) == 4:
-                    grid = torchvision.utils.make_grid(grid)
-                    writer.add_image('batch_' + str(sample_num), grid, 0)
-                    sample_num += 1
-                    grid = []
     
     # Define loss accumulators for statistics
     loss_acc = []
