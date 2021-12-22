@@ -52,7 +52,7 @@ def train(
     loss_objectness_acc = []
     loss_rpn_box_reg_acc = []
 
-    if dataloader_idx < 2:
+    if dataloader_idx + 1 < 2:
         print(
             f"\n\n\t{'Epoch':10}{'subset':11}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
     with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
@@ -100,7 +100,7 @@ def train(
             loss_rpn_box_reg_acc.append(loss_rpn_box_reg)
  
             pbar.set_description(('%13s' + '%11s' + '%12s' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' * 3) % (
-                f'{epoch + 1}/{epochs}' if dataloader_idx < 2 else f'{" ".ljust(13)}',
+                f'{epoch + 1}/{epochs}' if dataloader_idx + 1 < 2 else f'{" ".ljust(13)}',
                 f'{dataloader_idx + 1}/{num_of_dataloaders + 1}',
                 f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G',
                 lr, round(mean(loss_acc), 3), round(mean(loss_classifier_acc), 3), 
