@@ -52,8 +52,9 @@ def train(
     loss_objectness_acc = []
     loss_rpn_box_reg_acc = []
 
-    print(
-        f"\n\n\t{'Epoch':10}{'Dataloader':15}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
+    if dataloader_idx < 2:
+        print(
+            f"\n\n\t{'Epoch':10}{'subset':11}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
     with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
         for images, targets in metric_logger.log_every(dataloader, epoch + 1):
             images = list(image.to(device) for image in images)
@@ -98,9 +99,9 @@ def train(
             loss_objectness_acc.append(loss_objectness)
             loss_rpn_box_reg_acc.append(loss_rpn_box_reg)
  
-            pbar.set_description(('%13s' + '%12s' + '10' + '%12.3g' + '%9.3g' + '%10.3g' * 4) % (
-                f'{epoch + 1}/{epochs}', 
-                f'{dataloader_idx}/{num_of_dataloaders}',
+            pbar.set_description(('%13s' + '%11s' + '%12s' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' * 3) % (
+                f'{epoch + 1}/{epochs}' if dataloader_idx < 2 else f'{" ".ljust(13)}',
+                f'{dataloader_idx + 1}/{num_of_dataloaders + 1}',
                 f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G',
                 lr, round(mean(loss_acc), 3), round(mean(loss_classifier_acc), 3), 
                 round(mean(loss_box_reg_acc), 3), round(mean(loss_objectness_acc), 3), 
