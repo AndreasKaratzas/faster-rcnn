@@ -197,15 +197,14 @@ if __name__ == "__main__":
         args.anchor_sizes, args.aspect_ratios = autoanchors(
             dataloader=dataloader_valid)
         print(
-            f"\nSetting the following hyperparameters to the recommended values:\n\t"
-            f"Anchor sizes:\t{args.anchor_sizes:>60}\n\tAspect ratios:\t{args.aspect_ratios:>60}\n\n"
+            f"\nSetting the following hyperparameters to the recommended values.\n"
             f"\tTo disable the automated anchor software, pass the `--no-autoanchor` option.\n")
 
     print(
         f'Training Faster R-CNN for {args.epochs} epoch(s) with model backbone {args.backbone} with:\n'
         f'\t{args.trainable_layers:>60}\ttrainable layer(s)\n'
-        f'\t{args.anchor_sizes:>60}\tanchor sizes and\n'
-        f'\t{args.aspect_ratios:>60}\taspect ratios\n\nDataset stats:\n'
+        f'\t{[*args.anchor_sizes]:>60}\tanchor sizes and\n'
+        f'\t{[*args.aspect_ratios]:>60}\taspect ratios\n\nDataset stats:\n'
         f'\tLength of training data:\t{len(train_data):8d}\n'
         f'\tLength of validation data:\t{len(val_data):8d}\n\n')
 
