@@ -435,7 +435,6 @@ if __name__ == "__main__":
                     'cuda') else args.num_workers,
                 collate_fn=collate_fn,
                 pin_memory=True,
-                prefetch_factor=args.batch_size * 2,
                 persistent_workers=True,
                 sampler=train_sub_sampler
             )
@@ -472,8 +471,7 @@ if __name__ == "__main__":
 
             train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
                 model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision, 
-                iter_len=train_data.img_per_placeholder_lst[idx + 1] if train_data.num_of_image_placeholders > 1 else len(dataloader_train))
+                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision)
             train_logger.export_data()
 
             writer.add_scalar('lr/train', lr, epoch)

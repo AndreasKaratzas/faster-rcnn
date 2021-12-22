@@ -37,8 +37,7 @@ def train(
     epochs: int,
     epoch: int, 
     log_filepath: str,
-    apex_activated: bool,
-    iter_len: int
+    apex_activated: bool
 ):
     model.train()
     metric_logger = MetricLogger(f_path=log_filepath, delimiter="  ")
@@ -53,8 +52,8 @@ def train(
 
     print(
         f"\n\n\t{'Epoch':10}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
-    with tqdm(total=iter_len, bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
-        for images, targets in metric_logger.log_every(iterable=dataloader, iter_len=iter_len, epoch=epoch + 1):
+    with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
+        for images, targets in metric_logger.log_every(dataloader, epoch + 1):
             images = list(image.to(device) for image in images)
             targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
             

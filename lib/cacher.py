@@ -104,6 +104,9 @@ def _load_image(self, img_idx: int):
 
 class CustomCachedDetectionDataset(Dataset):
     def __init__(self, root_dir, num_threads: int = 8, batch_size: int = 16, img_size: int = 640, transforms=None, cache_images_flag: bool = True):
+        # Solves "OSError: Too many open files."
+        torch.multiprocessing.set_sharing_strategy('file_system')
+
         self.root_dir = root_dir
         self.transforms = transforms
         self.num_threads = num_threads
