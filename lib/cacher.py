@@ -170,14 +170,16 @@ class CustomCachedDetectionDataset(Dataset):
             self.img_per_placeholder_lst = [
                 _num_of_img_per_placeholder] * (self.num_of_image_placeholders - 1)
             # configure first index
-            self.img_per_placeholder_lst.insert(0,0)
+            self.img_per_placeholder_lst.insert(0, 0)
             # configure last index
             self.img_per_placeholder_lst.append(self.num_samples -
                                                 (_num_of_img_per_placeholder * self.num_of_image_placeholders))
             # index segment covered by each image placeholder
             self.img_idx_segment_per_placeholer = [self.img_per_placeholder_lst[idx - 1] +
-                                                   self.img_per_placeholder_lst[idx] for idx in range(len(self.img_per_placeholder_lst))]
-            
+                                                   self.img_per_placeholder_lst[idx] for idx in range(1, len(self.img_per_placeholder_lst))]
+            # configure first index
+            self.img_idx_segment_per_placeholer.insert(0, 0)
+
     def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
 
