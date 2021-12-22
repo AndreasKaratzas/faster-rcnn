@@ -165,7 +165,7 @@ class CustomCachedDetectionDataset(Dataset):
         if self.num_of_image_placeholders > 1:
             # set number of image samples per image placeholder
             _num_of_img_per_placeholder = np.ceil(
-                self.num_of_image_placeholders / self.num_samples).astype(int)
+                self.num_samples / self.num_of_image_placeholders).astype(int)
             # precompute the exact number of image samples per image placeholder
             self.img_per_placeholder_lst = [
                 _num_of_img_per_placeholder] * (self.num_of_image_placeholders - 1)
