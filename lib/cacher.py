@@ -181,7 +181,7 @@ class CustomCachedDetectionDataset(Dataset):
     def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
 
-        desc = f"Scanning '{cache_path.name}' directory for images and labels"
+        desc = f"Scanning '{cache_path.parent.name / cache_path.parent.stem}' directory for images and labels"
 
         if self.num_threads > 1:
             with Pool(self.num_threads) as pool:

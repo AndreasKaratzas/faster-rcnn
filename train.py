@@ -428,14 +428,14 @@ if __name__ == "__main__":
             dataloader_sub_train = DataLoader(
                 dataset=train_data,
                 batch_size=args.batch_size,
-                shuffle=True,
+                shuffle=False,
                 num_workers=args.n_devices if device == torch.device(
                     'cuda') else args.num_workers,
                 collate_fn=collate_fn,
                 pin_memory=True,
                 prefetch_factor=args.batch_size * 2,
                 persistent_workers=True,
-                sampler=train_sub_sampler,
+                sampler=train_sub_sampler
             )
             # register subset
             dataloader_train_lst.append(dataloader_sub_train)
