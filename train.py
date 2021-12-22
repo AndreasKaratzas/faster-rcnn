@@ -202,9 +202,9 @@ if __name__ == "__main__":
 
     print(
         f'Training Faster R-CNN for {args.epochs} epoch(s) with model backbone {args.backbone} with:\n'
-        f'\t{" ".join(str(args.trainable_layers)):>60} trainable layer(s)\n'
-        f'\t{" ".join([str(elem) for elem in args.anchor_sizes]):>60} anchor sizes and\n'
-        f'\t{" ".join([str(elem) for elem in args.aspect_ratios]):>60} aspect ratios\n\nDataset stats:\n'
+        f'{" ".join(str(args.trainable_layers)):>40} trainable layer(s)\n'
+        f'{" ".join([str(elem) for elem in args.anchor_sizes]):>40} anchor sizes and\n'
+        f'{" ".join([str(elem) for elem in args.aspect_ratios]):>40} aspect ratios\n\nDataset stats:\n'
         f'\tLength of training data:\t{len(train_data):8d}\n'
         f'\tLength of validation data:\t{len(val_data):8d}\n\n')
 
@@ -281,6 +281,8 @@ if __name__ == "__main__":
     # initialize tensorboard instance
     writer = SummaryWriter(log_save_dir, comment=args.project)
 
+    # initialize a hyperparameter dictionary
+    hparams = {}
     # export experiment settings
     with open(config_save_dir, "w") as f:
         data = {}
@@ -303,11 +305,8 @@ if __name__ == "__main__":
 
         json.dump(data, f)
 
-        hparams = data['model']
+        hparams.update(data['model'])
         hparams.update(data['dataset'])
-
-        # add experiment hyperparameters
-        writer.add_hparams(hparam_dict=hparams)
 
     if not args.no_model_graph:
         tb_model = TraceWrapper(model)
@@ -624,6 +623,12 @@ if __name__ == "__main__":
                 args.prof_settings[3]
             ) and args.profiling:
             prof.step()
+
+    # add experiment hyperparameters
+    writer.add_hparams(hparam_dict=hparams, metric_dict={
+        'AveragePrecision': elite_model_criterion.ap_p,
+        'AverageRecall': elite_model_criterion.ap_r
+    })
 
     experiment_data_plots(root_dir=log_save_dir, out_dir=plots_save_dir)
     writer.close()

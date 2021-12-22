@@ -20,10 +20,10 @@ class EliteModel():
         prec_values = epoch_ap[epoch_ap.Title == 'AveragePrecision'].Value
         rec_values = epoch_ap[epoch_ap.Title == 'AverageRecall'].Value
         
-        ap_p = np.mean(prec_values[prec_values >= 0])
-        ap_r = np.mean(rec_values[rec_values >= 0])
+        self.ap_p = np.mean(prec_values[prec_values >= 0])
+        self.ap_r = np.mean(rec_values[rec_values >= 0])
         
-        self.curr_overall_score = ap_p + ap_r
+        self.curr_overall_score = self.ap_p + self.ap_r
 
     def evaluate_model(self) -> bool:
         if self.curr_overall_score > self.last_chkpt_overall_score:
