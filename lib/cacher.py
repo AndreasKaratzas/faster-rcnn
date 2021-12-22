@@ -178,10 +178,10 @@ class CustomCachedDetectionDataset(Dataset):
             self.img_idx_segment_per_placeholer = [self.img_per_placeholder_lst[idx - 1] +
                                                    self.img_per_placeholder_lst[idx] for idx in range(len(self.img_per_placeholder_lst))]
             
-    def _cache_labels(self, cache_path: str):
+    def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
 
-        desc = f"Scanning '{Path(cache_path.parent.name) / Path(cache_path.parent.stem)}' directory for images and labels"
+        desc = f"Scanning '{Path(cache_path.parent.name) / Path(cache_path.stem)}' directory for images and labels"
 
         if self.num_threads > 1:
             with Pool(self.num_threads) as pool:
