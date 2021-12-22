@@ -144,7 +144,7 @@ if __name__ == "__main__":
     print(f"Device utilized:\t[{device}]\n")
 
     if device == torch.device('cuda'):
-        cuda_arch = cuda_check()
+        args.n_devices, cuda_arch = cuda_check()
 
         if not 'Turing' in cuda_arch and not 'Volta' in cuda_arch:
 
@@ -187,9 +187,12 @@ if __name__ == "__main__":
         dataset=train_data,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=args.num_workers,
+        num_workers=args.n_devices if device == torch.device(
+            'cuda') else args.num_workers,
         collate_fn=collate_fn,
-        pin_memory=True
+        pin_memory=True,
+        prefetch_factor=args.batch_size * 2,
+        persistent_workers=True
     )
 
     # validation dataloader
@@ -197,9 +200,11 @@ if __name__ == "__main__":
         dataset=val_data,
         batch_size=1,
         shuffle=False,
-        num_workers=args.num_workers,
+        num_workers=args.n_devices if device == torch.device(
+            'cuda') else args.num_workers,
         collate_fn=collate_fn,
-        pin_memory=True
+        pin_memory=True,
+        persistent_workers=True
     )
 
 

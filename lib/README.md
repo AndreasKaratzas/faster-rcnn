@@ -1,6 +1,7 @@
 # TODO
 
 * Add sub-dataset feature and load 2 sub-datasets to RAM memory for larger dataset manipulation
+* Automate class number (`num_classes`) generation
 * Add an `experiments` script with all experiments run to counter YOLOv5
 * Colors in messages
 * Add docstrings

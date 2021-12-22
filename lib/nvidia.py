@@ -1,22 +1,14 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 
 """
 Outputs some information on CUDA-enabled devices on your computer,
 including current memory usage.
 It's a port of https://gist.github.com/f0k/0d6431e3faa60bffc788f8b4daa029b1
-from C to Python with ctypes, so it can run without compiling anything. Note
-that this is a direct translation with no attempt to make the code Pythonic.
-It's meant as a general demonstration on how to obtain CUDA device information
-from Python without resorting to nvidia-smi or a compiled Python extension.
-Author: Jan Schlüter
-License: MIT (https://gist.github.com/f0k/63a664160d016a491b2cbea15913d549#gistcomment-3870498)
+from C to Python with ctypes, so it can run without compiling anything.
 """
 
 import ctypes
 
 
-# Some constants taken from cuda.h
 CUDA_SUCCESS = 0
 CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16
 CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR = 39
@@ -90,7 +82,7 @@ def ConvertSMVer2Arch(major, minor):
     }.get((major, minor), 'UNK')# unknown architecture, return a default value
 
 
-def cuda_check():
+def cuda_check(verbose: bool = False):
 
     libnames = ('libcuda.so', 'libcuda.dylib', 'nvcuda.dll')
     for libname in libnames:
@@ -119,6 +111,8 @@ def cuda_check():
     context = ctypes.c_void_p()
     error_str = ctypes.c_char_p()
 
+    msg = f""
+
     result = cuda.cuInit(0)
     if result != CUDA_SUCCESS:
         cuda.cuGetErrorString(result, ctypes.byref(error_str))
@@ -139,23 +133,21 @@ def cuda_check():
             print("cuDeviceGet failed with error code %d: %s" %
                   (result, error_str.value.decode()))
             return 1
-        print("Device: %d" % i)
+        msg = msg + f"Device: {i}\n"
         if cuda.cuDeviceGetName(ctypes.c_char_p(name), len(name), device) == CUDA_SUCCESS:
-            print("  Name: %s" % (name.split(b'\0', 1)[0].decode()))
+            msg = msg + f"\tName: {(name.split(b'\0', 1)[0].decode())}\n"
         if cuda.cuDeviceComputeCapability(ctypes.byref(cc_major), ctypes.byref(cc_minor), device) == CUDA_SUCCESS:
-            print("  Compute Capability: %d.%d" %
-                  (cc_major.value, cc_minor.value))
+            msg = msg + f"\tCompute Capability: {cc_major.value}.{cc_minor.value}\n"
         if cuda.cuDeviceGetAttribute(ctypes.byref(cores), CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device) == CUDA_SUCCESS:
-            print("  Multiprocessors: %d" % cores.value)
-            print("  CUDA Cores: %s" % (
-                cores.value * ConvertSMVer2Cores(cc_major.value, cc_minor.value) or "unknown"))
+            msg = msg + f"\tMultiprocessors: {cores.value}\n"
+            msg = msg + f"\tCUDA Cores: {cores.value * ConvertSMVer2Cores(cc_major.value, cc_minor.value)}\n"
             if cuda.cuDeviceGetAttribute(ctypes.byref(threads_per_core), CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, device) == CUDA_SUCCESS:
-                print("  Concurrent threads: %d" %
-                      (cores.value * threads_per_core.value))
+                msg = msg + \
+                    f"\tConcurrent threads: {cores.value * threads_per_core.value}\n"
         if cuda.cuDeviceGetAttribute(ctypes.byref(clockrate), CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device) == CUDA_SUCCESS:
-            print("  GPU clock: %g MHz" % (clockrate.value / 1000.))
+            msg = msg + f"\tGPU clock: {clockrate.value / 1000.} MHz\n"
         if cuda.cuDeviceGetAttribute(ctypes.byref(clockrate), CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, device) == CUDA_SUCCESS:
-            print("  Memory clock: %g MHz" % (clockrate.value / 1000.))
+            msg = msg + f"\tMemory clock: {clockrate.value / 1000.} MHz\n"
         try:
             result = cuda.cuCtxCreate_v2(ctypes.byref(context), 0, device)
         except AttributeError:
@@ -172,12 +164,15 @@ def cuda_check():
                 result = cuda.cuMemGetInfo(
                     ctypes.byref(freeMem), ctypes.byref(totalMem))
             if result == CUDA_SUCCESS:
-                print("  Total Memory: %ld MiB" % (totalMem.value / 1024**2))
-                print("  Free Memory: %ld MiB" % (freeMem.value / 1024**2))
+                msg = msg + f"\tTotal Memory: {totalMem.value / 1024**2} MiB\n"
+                msg = msg + f"\tFree Memory: {freeMem.value / 1024**2} MiB\n"
             else:
                 cuda.cuGetErrorString(result, ctypes.byref(error_str))
                 print("cuMemGetInfo failed with error code %d: %s" %
                       (result, error_str.value.decode()))
             cuda.cuCtxDetach(context)
     
-    return ConvertSMVer2Arch(cc_major.value, cc_minor.value)
+    if verbose:
+        print(msg)
+
+    return nGpus.value, ConvertSMVer2Arch(cc_major.value, cc_minor.value)

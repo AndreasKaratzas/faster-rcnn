@@ -181,8 +181,6 @@ class CustomCachedDetectionDataset(Dataset):
         return x
 
     def _cache_images(self):
-        # declare cache variable for images
-        self.images = [None] * self.num_samples
         # register memory allocated in RAM
         _allocated_mem = 0
         if self.num_threads > 1:
@@ -240,6 +238,9 @@ class CustomCachedDetectionDataset(Dataset):
         self.batch_index = np.floor(np.arange(self.num_samples) / self.batch_size).astype(np.int64)
         self.num_batches = self.batch_index[-1] + 1
         self.sample_idxs = range(self.num_samples)
+
+        # declare cache variable for images
+        self.images = [None] * self.num_samples
 
         # cache images
         if self.cache_images_flag:
