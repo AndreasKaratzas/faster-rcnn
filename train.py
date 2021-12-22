@@ -469,7 +469,8 @@ if __name__ == "__main__":
 
             train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
                 model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision)
+                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision, 
+                dataloader_idx=idx, num_of_dataloaders=train_data.num_of_image_placeholders)
             train_logger.export_data()
 
             writer.add_scalar('lr/train', lr, epoch)
