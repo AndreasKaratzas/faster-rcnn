@@ -416,11 +416,11 @@ if __name__ == "__main__":
     dataloader_train_idx = torch.randperm(len(train_data))
     # register training dataloaders
     if train_data.num_of_image_placeholders > 1:
-        for subset in range(train_data.num_of_image_placeholders):
+        for subset in range(1, train_data.num_of_image_placeholders):
             # define subsampler index segment
             dataloader_sub_train_idx = dataloader_train_idx[
-                train_data.img_idx_segment_per_placeholer[subset]:
-                train_data.img_idx_segment_per_placeholer[subset + 1]]
+                train_data.img_idx_segment_per_placeholer[subset - 1]:
+                train_data.img_idx_segment_per_placeholer[subset]]
             # initialize sub sampler
             train_sub_sampler = torch.utils.data.SubsetRandomSampler(
                 dataloader_sub_train_idx)
