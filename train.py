@@ -417,8 +417,6 @@ if __name__ == "__main__":
     # register training dataloaders
     if train_data.num_of_image_placeholders > 1:
         for subset in range(train_data.num_of_image_placeholders):
-            print(train_data.img_idx_segment_per_placeholer[subset],
-                  train_data.img_idx_segment_per_placeholer[subset + 1])
             # define subsampler index segment
             dataloader_sub_train_idx = dataloader_train_idx[
                 train_data.img_idx_segment_per_placeholer[subset]:
