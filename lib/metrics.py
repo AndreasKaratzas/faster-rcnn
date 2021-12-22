@@ -108,7 +108,7 @@ class MetricLogger(object):
     def add_meter(self, name, meter):
         self.meters[name] = meter
 
-    def log_every(self, iterable, epoch: int = None):
+    def log_every(self, iterable, iter_len: int, epoch: int = None):
         i = 1
         if epoch is None:
             raise ValueError(f'Invalid epoch argument ({type(epoch)})')
@@ -142,7 +142,7 @@ class MetricLogger(object):
             i += 1
             end = time.time()
         total_time = time.time() - start_time
-        self.time_per_iter = total_time / len(iterable)
+        self.time_per_iter = total_time / iter_len
     
     def get_metrics(self):
         
