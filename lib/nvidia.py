@@ -111,7 +111,7 @@ def cuda_check(verbose: bool = False):
     context = ctypes.c_void_p()
     error_str = ctypes.c_char_p()
 
-    msg = f""
+    msg = ""
 
     result = cuda.cuInit(0)
     if result != CUDA_SUCCESS:
@@ -125,7 +125,7 @@ def cuda_check(verbose: bool = False):
         print("cuDeviceGetCount failed with error code %d: %s" %
               (result, error_str.value.decode()))
         return 1
-    print("Found %d device(s)." % nGpus.value)
+    msg = msg + "Found %d device(s).\n" % nGpus.value
     for i in range(nGpus.value):
         result = cuda.cuDeviceGet(ctypes.byref(device), i)
         if result != CUDA_SUCCESS:
@@ -133,21 +133,20 @@ def cuda_check(verbose: bool = False):
             print("cuDeviceGet failed with error code %d: %s" %
                   (result, error_str.value.decode()))
             return 1
-        msg = msg + f"Device: {i}\n"
+        msg = msg + "Device: %d\n" % i
         if cuda.cuDeviceGetName(ctypes.c_char_p(name), len(name), device) == CUDA_SUCCESS:
-            msg = msg + f"\tName: {(name.split(b'\0', 1)[0].decode())}\n"
+            msg = msg + "\tName: %s\n" % (name.split(b'\0', 1)[0].decode())
         if cuda.cuDeviceComputeCapability(ctypes.byref(cc_major), ctypes.byref(cc_minor), device) == CUDA_SUCCESS:
-            msg = msg + f"\tCompute Capability: {cc_major.value}.{cc_minor.value}\n"
+            msg = msg + "\tCompute Capability: %d.%d\n" % (cc_major.value, cc_minor.value)
         if cuda.cuDeviceGetAttribute(ctypes.byref(cores), CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device) == CUDA_SUCCESS:
-            msg = msg + f"\tMultiprocessors: {cores.value}\n"
-            msg = msg + f"\tCUDA Cores: {cores.value * ConvertSMVer2Cores(cc_major.value, cc_minor.value)}\n"
+            msg = msg + "\tMultiprocessors: %d\n" % cores.value
+            msg = msg + "\tCUDA Cores: %s\n" % (cores.value * ConvertSMVer2Cores(cc_major.value, cc_minor.value) or "unknown")
             if cuda.cuDeviceGetAttribute(ctypes.byref(threads_per_core), CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR, device) == CUDA_SUCCESS:
-                msg = msg + \
-                    f"\tConcurrent threads: {cores.value * threads_per_core.value}\n"
+                msg = msg + "\tConcurrent threads: %d\n" % (cores.value * threads_per_core.value)
         if cuda.cuDeviceGetAttribute(ctypes.byref(clockrate), CU_DEVICE_ATTRIBUTE_CLOCK_RATE, device) == CUDA_SUCCESS:
-            msg = msg + f"\tGPU clock: {clockrate.value / 1000.} MHz\n"
+            msg = msg + "\tGPU clock: %g MHz\n" % (clockrate.value / 1000.)
         if cuda.cuDeviceGetAttribute(ctypes.byref(clockrate), CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE, device) == CUDA_SUCCESS:
-            msg = msg + f"\tMemory clock: {clockrate.value / 1000.} MHz\n"
+            msg = msg + "\tMemory clock: %g MHz\n" % (clockrate.value / 1000.)
         try:
             result = cuda.cuCtxCreate_v2(ctypes.byref(context), 0, device)
         except AttributeError:
@@ -164,14 +163,14 @@ def cuda_check(verbose: bool = False):
                 result = cuda.cuMemGetInfo(
                     ctypes.byref(freeMem), ctypes.byref(totalMem))
             if result == CUDA_SUCCESS:
-                msg = msg + f"\tTotal Memory: {totalMem.value / 1024**2} MiB\n"
-                msg = msg + f"\tFree Memory: {freeMem.value / 1024**2} MiB\n"
+                msg = msg + "\tTotal Memory: %ld MiB\n" % (totalMem.value / 1024**2)
+                msg = msg + "\tFree Memory: %ld MiB\n" % (freeMem.value / 1024**2)
             else:
                 cuda.cuGetErrorString(result, ctypes.byref(error_str))
                 print("cuMemGetInfo failed with error code %d: %s" %
                       (result, error_str.value.decode()))
             cuda.cuCtxDetach(context)
-    
+
     if verbose:
         print(msg)
 

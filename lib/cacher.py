@@ -1,6 +1,7 @@
 
 import os
 import glob
+import psutil
 import torch
 import hashlib
 import numpy as np
@@ -132,7 +133,51 @@ class CustomCachedDetectionDataset(Dataset):
         h = hashlib.md5(str(size).encode())
         h.update(''.join(paths).encode())
         return h.hexdigest()
-
+    
+    def _compute_image_placeholders(self):
+        """ To accumulate the product of two list elements:
+        >>> np.prod(lst[:2])
+        To accumulate the sum of two list elements:
+        >>> np.sum(lst[:2])
+        """
+        image_idx = 0
+        # fetch if it does not exist
+        img_path = self.img_files[image_idx]
+        # load image sample
+        img = Image.open(img_path).convert("RGB")
+        # reduce image dimensions
+        img = img.resize((self.img_size, self.img_size), Image.NEAREST)
+        # assert error if image was not found
+        assert img is not None, f'Image Not Found {image_idx}'
+        # get ram requirements for a single sample
+        _allocated_mem = np.asarray(img).nbytes
+        # get total ram memory
+        _available_ram_space = psutil.virtual_memory().available
+        # compute expected ram requirements
+        _expected_ram_reqs = np.ceil(
+            self.num_samples * _allocated_mem * 1.1).astype(int)
+        # estimate number of image placeholders
+        self.num_of_image_placeholders = np.ceil(
+            _expected_ram_reqs / _available_ram_space).astype(int)
+        # reconfigure number of image placeholders to handle with threading
+        self.num_of_image_placeholders = self.num_of_image_placeholders + \
+            1 if self.num_of_image_placeholders > 1 else 1
+        if self.num_of_image_placeholders > 1:
+            # set number of image samples per image placeholder
+            _num_of_img_per_placeholder = np.ceil(
+                self.num_of_image_placeholders / self.num_samples).astype(int)
+            # precompute the exact number of image samples per image placeholder
+            self.img_per_placeholder_lst = [
+                _num_of_img_per_placeholder] * (self.num_of_image_placeholders - 1)
+            # configure first index
+            self.img_per_placeholder_lst.insert(0,0)
+            # configure last index
+            self.img_per_placeholder_lst.append(self.num_samples -
+                                                (_num_of_img_per_placeholder * self.num_of_image_placeholders))
+            # index segment covered by each image placeholder
+            self.img_idx_segment_per_placeholer = [self.img_per_placeholder_lst[idx - 1] +
+                                                   self.img_per_placeholder_lst[idx] for idx in range(len(self.img_per_placeholder_lst) + 1)]
+            
     def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
 
@@ -244,7 +289,8 @@ class CustomCachedDetectionDataset(Dataset):
 
         # cache images
         if self.cache_images_flag:
-            self._cache_images()
+            self._compute_image_placeholders()
+            # self._cache_images()
 
     def __getitem__(self, idx):
         img = _load_image(self, idx)

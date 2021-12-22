@@ -78,8 +78,6 @@ if __name__ == "__main__":
                              f'2. warmup (default: 5)\n'
                              f'3. active (default: 10)\n'
                              f'4. repeat (default: 3)')
-    parser.add_argument('--pretrained', action="store_true",
-                        help='Use pre-trained models.')
     parser.add_argument(
         '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
     parser.add_argument('--aspect-ratios', default=[
@@ -182,19 +180,6 @@ if __name__ == "__main__":
         )
     )
 
-    # training dataloader
-    dataloader_train = DataLoader(
-        dataset=train_data,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.n_devices if device == torch.device(
-            'cuda') else args.num_workers,
-        collate_fn=collate_fn,
-        pin_memory=True,
-        prefetch_factor=args.batch_size * 2,
-        persistent_workers=True
-    )
-
     # validation dataloader
     dataloader_valid = DataLoader(
         dataset=val_data,
@@ -207,23 +192,22 @@ if __name__ == "__main__":
         persistent_workers=True
     )
 
-
     # autoanchor software
     if not args.no_autoanchor:
         args.anchor_sizes, args.aspect_ratios = autoanchors(
             dataloader=dataloader_valid)
         print(
             f"\nSetting the following hyperparameters to the recommended values:\n\t"
-            f"Anchor sizes:\t{args.anchor_sizes}\n\tAspect ratios:\t{args.aspect_ratios}\n\n"
+            f"Anchor sizes:\t{args.anchor_sizes:>60}\n\tAspect ratios:\t{args.aspect_ratios:>60}\n\n"
             f"\tTo disable the automated anchor software, pass the `--no-autoanchor` option.\n")
 
     print(
         f'Training Faster R-CNN for {args.epochs} epoch(s) with model backbone {args.backbone} with:\n'
-        f'\t{args.trainable_layers}\t\t\t\t\ttrainable layer(s)\n'
-        f'\t{args.anchor_sizes}\t\tanchor sizes and\n'
-        f'\t{args.aspect_ratios}\t\taspect ratios\n\nDataset stats:\n'
-        f'\tLength of train data:\t\t{len(train_data):5d}\n'
-        f'\tLength of validation data:\t{len(val_data):5d}\n\n')
+        f'\t{args.trainable_layers:>60}\ttrainable layer(s)\n'
+        f'\t{args.anchor_sizes:>60}\tanchor sizes and\n'
+        f'\t{args.aspect_ratios:>60}\taspect ratios\n\nDataset stats:\n'
+        f'\tLength of training data:\t{len(train_data):8d}\n'
+        f'\tLength of validation data:\t{len(val_data):8d}\n\n')
 
     # custom model init
     model = configure_model(
@@ -253,26 +237,6 @@ if __name__ == "__main__":
     gt_save_dir.mkdir(parents=True, exist_ok=True)
     config_save_dir = Path(args.root_dir) / datetime_tag / "CONFIG.json"
 
-    with open(config_save_dir, "w") as f:
-        data = {}
-
-        data['model'] = {
-            'backbone': args.backbone,
-            'anchors': ['{:.2f}'.format(x) for x in args.anchor_sizes],
-            'ratios': ['{:.2f}'.format(x) for x in args.aspect_ratios],
-            'epochs': args.epochs,
-            'checkpoint': args.resume,
-            'start': args.start_epoch,
-            'trainable': args.trainable_layers
-        }
-
-        data['dataset'] = {
-            'classes': args.num_classes,
-            'img_size': args.img_size,
-            'directory': args.dataset
-        }
-
-        json.dump(data, f)
 
     log_save_dir_train = log_save_dir / "training.txt"
     log_save_dir_validation = log_save_dir / "validation.txt"
@@ -318,6 +282,34 @@ if __name__ == "__main__":
     # initialize tensorboard instance
     writer = SummaryWriter(log_save_dir, comment=args.project)
 
+    # export experiment settings
+    with open(config_save_dir, "w") as f:
+        data = {}
+
+        data['model'] = {
+            'backbone': args.backbone,
+            'anchors': ['{:.2f}'.format(x) for x in args.anchor_sizes],
+            'ratios': ['{:.2f}'.format(x) for x in args.aspect_ratios],
+            'epochs': args.epochs,
+            'checkpoint': args.resume,
+            'start': args.start_epoch,
+            'trainable': args.trainable_layers
+        }
+
+        data['dataset'] = {
+            'classes': args.num_classes,
+            'img_size': args.img_size,
+            'directory': args.dataset
+        }
+
+        json.dump(data, f)
+
+        hparams = data['model']
+        hparams.update(data['dataset'])
+
+        # add experiment hyperparameters
+        writer.add_hparams(hparam_dict=hparams)
+
     if not args.no_model_graph:
         tb_model = TraceWrapper(model)
         tb_model.eval()
@@ -331,7 +323,7 @@ if __name__ == "__main__":
 
     # load model to device
     model = model.to(device)
-    
+
     # optional dataset sample visualization
     if not args.no_visual:
         sample_ratio = 1e-2
@@ -351,7 +343,7 @@ if __name__ == "__main__":
         )
 
         if not args.no_visual:
-            
+
             visualize = VisualTest(
                 num_classes=args.num_classes, res_dir=gt_save_dir)
 
@@ -420,6 +412,50 @@ if __name__ == "__main__":
         print(f"WARNING: Model will not be stored as a JIT script module "
               f"because mixed precision is enabled.")
 
+    # initialize dataloader placeholder
+    dataloader_train_lst = []
+    # split dataset into memory friendly dataloaders
+    dataloader_train_idx = torch.randperm(len(train_data))
+    # register training dataloaders
+    if train_data.num_of_image_placeholders > 1:
+        for subset in range(train_data.num_of_image_placeholders):
+            # define subsampler index segment
+            dataloader_sub_train_idx = dataloader_train_idx[
+                train_data.img_idx_segment_per_placeholer[subset]:
+                train_data.img_idx_segment_per_placeholer[subset + 1]]
+            # initialize sub sampler
+            train_sub_sampler = torch.utils.data.SubsetRandomSampler(
+                dataloader_sub_train_idx)
+            # define dataloader
+            dataloader_sub_train = DataLoader(
+                dataset=train_data,
+                batch_size=args.batch_size,
+                shuffle=True,
+                num_workers=args.n_devices if device == torch.device(
+                    'cuda') else args.num_workers,
+                collate_fn=collate_fn,
+                pin_memory=True,
+                prefetch_factor=args.batch_size * 2,
+                persistent_workers=True,
+                sampler=train_sub_sampler,
+            )
+            # register subset
+            dataloader_train_lst.append(dataloader_sub_train)
+    else:
+        # define dataloader
+        dataloader_train = DataLoader(
+            dataset=train_data,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.n_devices if device == torch.device(
+                'cuda') else args.num_workers,
+            collate_fn=collate_fn,
+            pin_memory=True,
+            prefetch_factor=args.batch_size * 2,
+            persistent_workers=True
+        )
+        dataloader_train_lst.append(dataloader_train)
+
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
 
@@ -428,21 +464,26 @@ if __name__ == "__main__":
                 args.prof_settings[1] +
                 args.prof_settings[2]) *
                 args.prof_settings[3]
-        ) and args.profiling:
+            ) and args.profiling:
             prof.stop()
 
-        train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
-            model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-            epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision)
-        train_logger.export_data()
+        # loop through all training dataloaders
+        for dataloader_train in dataloader_train_lst:
 
-        writer.add_scalar('lr/train', lr, epoch)
-        writer.add_scalar('loss/train', loss_acc, epoch)
-        writer.add_scalar('loss_classifier/train', loss_classifier_acc, epoch)
-        writer.add_scalar('loss_box_reg/train', loss_box_reg_acc, epoch)
-        writer.add_scalar('loss_objectness/train', loss_objectness_acc, epoch)
-        writer.add_scalar('loss_rpn_box_reg/train',
-                          loss_rpn_box_reg_acc, epoch)
+            train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
+                model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
+                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision)
+            train_logger.export_data()
+
+            writer.add_scalar('lr/train', lr, epoch)
+            writer.add_scalar('loss/train', loss_acc, epoch)
+            writer.add_scalar('loss_classifier/train',
+                              loss_classifier_acc, epoch)
+            writer.add_scalar('loss_box_reg/train', loss_box_reg_acc, epoch)
+            writer.add_scalar('loss_objectness/train',
+                              loss_objectness_acc, epoch)
+            writer.add_scalar('loss_rpn_box_reg/train',
+                              loss_rpn_box_reg_acc, epoch)
 
         val_metrics = validate(model=model, dataloader=dataloader_valid, device=device,
                                log_filepath=log_save_dir_validation, epoch=epoch)
@@ -582,7 +623,7 @@ if __name__ == "__main__":
                 args.prof_settings[1] +
                 args.prof_settings[2]) *
                 args.prof_settings[3]
-                ) and args.profiling:
+            ) and args.profiling:
             prof.step()
 
     experiment_data_plots(root_dir=log_save_dir, out_dir=plots_save_dir)
