@@ -178,8 +178,8 @@ class CustomCachedDetectionDataset(Dataset):
             self.img_per_placeholder_lst.append(self.num_samples -
                                                 (_num_of_img_per_placeholder * self.num_of_image_placeholders))
             # index segment covered by each image placeholder
-            self.img_idx_segment_per_placeholer = [self.img_per_placeholder_lst[idx - 1] +
-                                                   self.img_per_placeholder_lst[idx] for idx in range(1, len(self.img_per_placeholder_lst))]
+            self.img_idx_segment_per_placeholer = [np.sum(
+                self.img_per_placeholder_lst[:idx]) for idx in range(1, len(self.img_per_placeholder_lst))]
             # configure first index
             self.img_idx_segment_per_placeholer.insert(0, 0)
 
