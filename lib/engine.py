@@ -52,6 +52,9 @@ def train(
     loss_objectness_acc = []
     loss_rpn_box_reg_acc = []
 
+    # initialize a logger
+    msg = ""
+
     if dataloader_idx + 1 < 2:
         print(
             f"\n\n\t{'Epoch':10}{'subset':11}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
@@ -71,21 +74,19 @@ def train(
             loss_value = losses_reduced.item()
 
             if not math.isfinite(loss_value):
-                print("Loss is {}, stopping training".format(loss_value))
-                print(loss_dict_reduced)
-                sys.exit(1)
-
-            blockPrint()
-            optimizer.zero_grad()
-            
-            if apex_activated:
-                with amp.scale_loss(losses, optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                msg = msg + "Loss was {} at some point.\n".format(loss_value)
             else:
-                losses.backward()
+                blockPrint()
+                optimizer.zero_grad()
+                
+                if apex_activated:
+                    with amp.scale_loss(losses, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    losses.backward()
 
-            optimizer.step()
-            enablePrint()
+                optimizer.step()
+                enablePrint()
             
             metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
             metric_logger.update(lr=optimizer.param_groups[0]["lr"])
@@ -110,6 +111,8 @@ def train(
             pbar.update(1)
         
         pbar.close()
+    
+    print(msg)
 
     return \
         metric_logger, lr, \
