@@ -88,8 +88,8 @@ def train(
                 optimizer.step()
                 enablePrint()
             
-            metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
-            metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+                metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
+                metric_logger.update(lr=optimizer.param_groups[0]["lr"])
             
             lr = optimizer.param_groups[0]["lr"]
             loss, loss_classifier, loss_box_reg, loss_objectness, loss_rpn_box_reg = metric_logger.get_metrics()
