@@ -112,7 +112,8 @@ def train(
         
         pbar.close()
     
-    print(msg)
+    if len(msg) > 0:
+        print(msg)
 
     return \
         metric_logger, lr, \
@@ -146,7 +147,7 @@ def validate(
                                  f"{'mAP@.5':11}{'mAP@.75':11}"
                                  f"{'mAP@s':10}{'mAP@m':10}"
                                  f"{'mAP@l':9}{'Recall':6}",
-                bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}')
+                bar_format='{l_bar}{bar:25}{r_bar}{bar:-25b}')
     for images, targets in pbar:
         images = list(image.to(device) for image in images)
 
