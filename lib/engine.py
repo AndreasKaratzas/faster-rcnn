@@ -139,7 +139,7 @@ def validate(
     coco_evaluator = CocoEvaluator(coco, iou_types, log_filepath, epoch + 1)
     enablePrint()
 
-    pbar = tqdm(dataloader, desc=f"{'               mAP@.5:.95':29}"
+    pbar = tqdm(dataloader, desc=f"{'                          mAP@.5:.95':40}"
                                  f"{'mAP@.5':11}{'mAP@.75':11}"
                                  f"{'mAP@s':10}{'mAP@m':10}"
                                  f"{'mAP@l':9}{'Recall':6}",
@@ -167,7 +167,7 @@ def validate(
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
 
-    print(('%25.3g' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' + '%10.3g' + '%10.3g') % (
+    print(('%36.3g' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' + '%10.3g' + '%10.3g') % (
         coco_evaluator.stats[0], coco_evaluator.stats[1], coco_evaluator.stats[2], coco_evaluator.stats[3],
         coco_evaluator.stats[4], coco_evaluator.stats[5], np.mean(coco_evaluator.stats[6:])))
     torch.set_num_threads(n_threads)

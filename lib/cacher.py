@@ -158,7 +158,7 @@ class CustomCachedDetectionDataset(Dataset):
         _available_ram_space = psutil.virtual_memory().available
         # compute expected ram requirements
         _expected_ram_reqs = np.ceil(
-            self.num_samples * _allocated_mem * 1.1).astype(int)
+            self.num_samples * _allocated_mem * 1.1)
         # estimate number of image placeholders
         self.num_of_image_placeholders = np.ceil(
             _expected_ram_reqs / _available_ram_space).astype(int)
@@ -176,11 +176,11 @@ class CustomCachedDetectionDataset(Dataset):
             self.img_per_placeholder_lst.insert(0, 0)
             # configure last index
             self.img_per_placeholder_lst.append(self.num_samples -
-                                                (_num_of_img_per_placeholder * self.num_of_image_placeholders))
+                                                (_num_of_img_per_placeholder * (self.num_of_image_placeholders - 1)))
             # index segment covered by each image placeholder
             self.img_idx_segment_per_placeholer = [np.sum(
-                self.img_per_placeholder_lst[:idx]) for idx in range(1, len(self.img_per_placeholder_lst))]
-
+                self.img_per_placeholder_lst[:idx]) for idx in range(1, len(self.img_per_placeholder_lst) + 1)]
+            
     def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
 

@@ -236,7 +236,6 @@ if __name__ == "__main__":
     gt_save_dir.mkdir(parents=True, exist_ok=True)
     config_save_dir = Path(args.root_dir) / datetime_tag / "CONFIG.json"
 
-
     log_save_dir_train = log_save_dir / "training.txt"
     log_save_dir_validation = log_save_dir / "validation.txt"
 
@@ -416,7 +415,7 @@ if __name__ == "__main__":
     dataloader_train_idx = torch.randperm(len(train_data))
     # register training dataloaders
     if train_data.num_of_image_placeholders > 1:
-        for subset in range(1, train_data.num_of_image_placeholders):
+        for subset in range(1, len(train_data.img_idx_segment_per_placeholer)):
             # define subsampler index segment
             dataloader_sub_train_idx = dataloader_train_idx[
                 train_data.img_idx_segment_per_placeholer[subset - 1]:
@@ -457,11 +456,11 @@ if __name__ == "__main__":
     for epoch in range(args.start_epoch, args.epochs):
 
         if (epoch >= (
-                args.prof_settings[0] +
-                args.prof_settings[1] +
-                args.prof_settings[2]) *
-                args.prof_settings[3]
-            ) and args.profiling:
+                    args.prof_settings[0] +
+                    args.prof_settings[1] +
+                    args.prof_settings[2]) *
+                    args.prof_settings[3]
+                ) and args.profiling:
             prof.stop()
 
         # loop through all training dataloaders
@@ -469,7 +468,7 @@ if __name__ == "__main__":
 
             train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
                 model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision, 
+                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision,
                 dataloader_idx=idx, num_of_dataloaders=train_data.num_of_image_placeholders)
             train_logger.export_data()
 
@@ -617,11 +616,11 @@ if __name__ == "__main__":
                 model_save_dir, 'traced_last.pt'))
 
         if (epoch < (
-                args.prof_settings[0] +
-                args.prof_settings[1] +
-                args.prof_settings[2]) *
-                args.prof_settings[3]
-            ) and args.profiling:
+                    args.prof_settings[0] +
+                    args.prof_settings[1] +
+                    args.prof_settings[2]) *
+                    args.prof_settings[3]
+                ) and args.profiling:
             prof.step()
 
     # add experiment hyperparameters
