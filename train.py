@@ -92,6 +92,8 @@ if __name__ == "__main__":
     parser.add_argument('--trainable-layers', default=3,
                         type=int, help=f'Number of CNN backbone layers to train '
                                        f'(min: 0, max: 5, default: 3).')
+    parser.add_argument('--opt-level', default='O3',
+                        help='Optimization level for mixed precision model training (default: O3).')
     parser.add_argument('--no-mixed-precision', action='store_true',
                         help='Disable mixed precision for model training.')
     parser.add_argument('--no-visual', action='store_true',
@@ -123,6 +125,9 @@ if __name__ == "__main__":
         raise ValueError(f"Path to validation image data does not exist.")
     if not os.path.isdir(os.path.join(args.dataset, "valid", "labels")):
         raise ValueError(f"Path to validation label data does not exist.")
+
+    if not (args.opt_level == 'O1' or args.opt_level == 'O2' or args.opt_level == 'O3'):
+        raise ValueError(f"Optimization level can be `O1`, `O2` or `O3`.")
 
     if args.trainable_layers > 5 or args.trainable_layers < 0:
         raise ValueError(
@@ -375,7 +380,8 @@ if __name__ == "__main__":
         print("RECOMMENDATION: Try training the model with mixed precision"
               f" DISABLED except if your GPU really supports mixed precision.")
         # Wrap the model
-        model, optimizer = amp.initialize(model, optimizer, opt_level='O3')
+        model, optimizer = amp.initialize(
+            model, optimizer, opt_level=args.opt_level)
 
     # profile the model
     prof = None
