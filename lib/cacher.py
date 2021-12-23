@@ -290,9 +290,9 @@ class CustomCachedDetectionDataset(Dataset):
         # declare cache variable for images
         self.images = [None] * self.num_samples
 
+        self._compute_image_placeholders()
         # cache images
-        if self.cache_images_flag:
-            self._compute_image_placeholders()
+        # if self.cache_images_flag:
             # self._cache_images()
 
     def __getitem__(self, idx):
