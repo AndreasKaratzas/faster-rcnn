@@ -101,7 +101,7 @@ def train(
  
             pbar.set_description(('%13s' + '%11s' + '%12s' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' * 3) % (
                 f'{epoch + 1}/{epochs}' if dataloader_idx + 1 < 2 else f'{" ".ljust(13)}',
-                f'{dataloader_idx + 1}/{num_of_dataloaders + 1}',
+                f'{dataloader_idx + 1}/{num_of_dataloaders}',
                 f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G',
                 lr, round(mean(loss_acc), 3), round(mean(loss_classifier_acc), 3), 
                 round(mean(loss_box_reg_acc), 3), round(mean(loss_objectness_acc), 3), 
