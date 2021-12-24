@@ -138,11 +138,6 @@ class CustomCachedDetectionDataset(Dataset):
         return h.hexdigest()
     
     def _compute_image_placeholders(self):
-        """ To accumulate the product of two list elements:
-        >>> np.prod(lst[:2])
-        To accumulate the sum of two list elements:
-        >>> np.sum(lst[:2])
-        """
         image_idx = 0
         # fetch if it does not exist
         img_path = self.img_files[image_idx]
