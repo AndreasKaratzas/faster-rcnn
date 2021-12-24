@@ -116,6 +116,11 @@ class installCocoDataset:
             ):
 
                 try:
+                    print(os.path.join(
+                        self.res_dir,
+                        subset_id, "label",
+                        str(Path(img_path).resolve().stem) + ".txt"
+                    ))
                     label = np.loadtxt(
                         os.path.join(
                             self.res_dir, 
@@ -136,7 +141,6 @@ class installCocoDataset:
                             self.res_dir, subset_id, "images", img_path))
                 
                 except IOError:
-
                     file_not_found_cntr += 1
 
             if rot_cntr > 0:
@@ -150,9 +154,9 @@ class installCocoDataset:
         subsets = ['train', 'valid']
         original = ['train2017', 'val2017']
         
-        cntr = 0
-
         for origin, subset_id in zip(original, subsets):
+
+            cntr = 0
 
             imgs_paths = os.listdir(os.path.join(
                 self.res_dir, subset_id, "images"))
