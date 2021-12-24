@@ -116,15 +116,10 @@ class installCocoDataset:
             ):
 
                 try:
-                    print(os.path.join(
-                        self.res_dir,
-                        subset_id, "label",
-                        str(Path(img_path).resolve().stem) + ".txt"
-                    ))
                     label = np.loadtxt(
                         os.path.join(
                             self.res_dir, 
-                            subset_id, "label", 
+                            subset_id, "labels", 
                             str(Path(img_path).resolve().stem) + ".txt"
                         )
                     )
