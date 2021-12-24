@@ -76,8 +76,8 @@ class MetricLogger(object):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
         self.export_filepath = f_path
-        self.log_message = []           
-        
+        self.log_message = []
+
     def update(self, **kwargs):
         for k, v in kwargs.items():
             if isinstance(v, torch.Tensor):
@@ -112,24 +112,24 @@ class MetricLogger(object):
         i = 1
         if epoch is None:
             raise ValueError(f'Invalid epoch argument ({type(epoch)})')
-        
+
         start_time = time.time()
         end = time.time()
         iter_time = SmoothedValue(fmt='{avg:.4f}')
         data_time = SmoothedValue(fmt='{avg:.4f}')
-        
+
         for obj in iterable:
             data_time.update(time.time() - end)
             yield obj
             iter_time.update(time.time() - end)
-            
+
             log_dict = {
                 'epoch': int(epoch)
             }
 
             if torch.cuda.is_available():
                 log_dict['memory'] = int(round(
-                    torch.cuda.memory_reserved() / 1E9))
+                    torch.cuda.memory_reserved() / 1E6))
             else:
                 log_dict['memory'] = 0
 
@@ -143,9 +143,9 @@ class MetricLogger(object):
             end = time.time()
         total_time = time.time() - start_time
         self.time_per_iter = total_time / len(iterable)
-    
+
     def get_metrics(self):
-        
+
         self.stats = {}
         for key in self.meters:
             self.stats[key] = round(
@@ -157,7 +157,7 @@ class MetricLogger(object):
             self.stats.get('loss_box_reg'),   \
             self.stats.get('loss_objectness'),\
             self.stats.get('loss_rpn_box_reg')
-        
+
     def export_data(self):
         with open(self.export_filepath, "a") as f:
             for entry in self.log_message:
