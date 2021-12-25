@@ -160,8 +160,8 @@ class CustomCachedDetectionDataset(Dataset):
         self.num_of_image_placeholders = np.ceil(
             _expected_ram_reqs / _available_ram_space).astype(int)
         # reconfigure number of image placeholders to handle with threading
-        self.num_of_image_placeholders = self.num_of_image_placeholders + \
-            1 if self.num_of_image_placeholders > 1 else 1
+        self.num_of_image_placeholders = self.num_of_image_placeholders * 2 \
+            if self.num_of_image_placeholders > 1 else 1
         if self.num_of_image_placeholders > 1:
             # set number of image samples per image placeholder
             _num_of_img_per_placeholder = np.ceil(

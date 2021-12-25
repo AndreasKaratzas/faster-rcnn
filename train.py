@@ -415,6 +415,8 @@ if __name__ == "__main__":
         print(f"WARNING: Model will not be stored as a JIT script module "
               f"because mixed precision is enabled.")
 
+    # configure threads
+    thread_cachers_lst = []
     # initialize dataloader placeholder
     dataloader_train_lst = []
     # split dataset into memory friendly dataloaders
@@ -456,6 +458,7 @@ if __name__ == "__main__":
             prefetch_factor=args.batch_size * 2,
             persistent_workers=True
         )
+        # register set
         dataloader_train_lst.append(dataloader_train)
 
     # start fitting the model
