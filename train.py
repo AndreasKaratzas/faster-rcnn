@@ -79,9 +79,9 @@ if __name__ == "__main__":
                              f'3. active (default: 10)\n'
                              f'4. repeat (default: 3)')
     parser.add_argument(
-        '--anchor-sizes', default=[32, 64, 128, 256, 512], nargs='+', type=int, help='Anchor sizes.')
+        '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
     parser.add_argument('--aspect-ratios', default=[
-                        0.5, 1.0, 2.0], nargs='+', type=int,
+                        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int,
                         help='Anchor ratios.')
     parser.add_argument('--no-autoanchor', action='store_true',
                         help='Disable anchor recommendation software.')
@@ -183,19 +183,6 @@ if __name__ == "__main__":
             transform_class="valid",
             img_size=args.img_size
         )
-    )
-
-    # define dataloader
-    dataloader_train = DataLoader(
-        dataset=train_data,
-        batch_size=args.batch_size,
-        shuffle=True,
-        num_workers=args.n_devices if device == torch.device(
-            'cuda') else args.num_workers,
-        collate_fn=collate_fn,
-        pin_memory=True,
-        prefetch_factor=args.batch_size * 2,
-        persistent_workers=True
     )
 
     # validation dataloader
@@ -428,32 +415,78 @@ if __name__ == "__main__":
         print(f"WARNING: Model will not be stored as a JIT script module "
               f"because mixed precision is enabled.")
 
+    # initialize dataloader placeholder
+    dataloader_train_lst = []
+    # split dataset into memory friendly dataloaders
+    dataloader_train_idx = torch.randperm(len(train_data))
+    # register training dataloaders
+    if train_data.num_of_image_placeholders > 1:
+        for subset in range(1, len(train_data.img_idx_segment_per_placeholer)):
+            # define subsampler index segment
+            dataloader_sub_train_idx = dataloader_train_idx[
+                train_data.img_idx_segment_per_placeholer[subset - 1]:
+                train_data.img_idx_segment_per_placeholer[subset]]
+            # initialize sub sampler
+            train_sub_sampler = torch.utils.data.SubsetRandomSampler(
+                dataloader_sub_train_idx)
+            # define dataloader
+            dataloader_sub_train = DataLoader(
+                dataset=train_data,
+                batch_size=args.batch_size,
+                shuffle=False,
+                num_workers=args.n_devices if device == torch.device(
+                    'cuda') else args.num_workers,
+                collate_fn=collate_fn,
+                pin_memory=True,
+                persistent_workers=True,
+                sampler=train_sub_sampler
+            )
+            # register subset
+            dataloader_train_lst.append(dataloader_sub_train)
+    else:
+        # define dataloader
+        dataloader_train = DataLoader(
+            dataset=train_data,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.n_devices if device == torch.device(
+                'cuda') else args.num_workers,
+            collate_fn=collate_fn,
+            pin_memory=True,
+            prefetch_factor=args.batch_size * 2,
+            persistent_workers=True
+        )
+        dataloader_train_lst.append(dataloader_train)
+
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
 
         if (epoch >= (
-                    args.prof_settings[0] +
-                    args.prof_settings[1] +
-                    args.prof_settings[2]) *
-                    args.prof_settings[3]
-                ) and args.profiling:
+            args.prof_settings[0] +
+            args.prof_settings[1] +
+            args.prof_settings[2]) *
+            args.prof_settings[3]
+            ) and args.profiling:
             prof.stop()
 
-        
-        train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
-            model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
-            epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision)
-        train_logger.export_data()
+        # loop through all training dataloaders
+        for idx, dataloader_train in enumerate(dataloader_train_lst):
 
-        writer.add_scalar('lr/train', lr, epoch)
-        writer.add_scalar('loss/train', loss_acc, epoch)
-        writer.add_scalar('loss_classifier/train',
-                            loss_classifier_acc, epoch)
-        writer.add_scalar('loss_box_reg/train', loss_box_reg_acc, epoch)
-        writer.add_scalar('loss_objectness/train',
-                            loss_objectness_acc, epoch)
-        writer.add_scalar('loss_rpn_box_reg/train',
-                            loss_rpn_box_reg_acc, epoch)
+            train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
+                model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
+                epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision,
+                dataloader_idx=idx, num_of_dataloaders=train_data.num_of_image_placeholders)
+            train_logger.export_data()
+
+            writer.add_scalar('lr/train', lr, epoch)
+            writer.add_scalar('loss/train', loss_acc, epoch)
+            writer.add_scalar('loss_classifier/train',
+                              loss_classifier_acc, epoch)
+            writer.add_scalar('loss_box_reg/train', loss_box_reg_acc, epoch)
+            writer.add_scalar('loss_objectness/train',
+                              loss_objectness_acc, epoch)
+            writer.add_scalar('loss_rpn_box_reg/train',
+                              loss_rpn_box_reg_acc, epoch)
 
         val_metrics = validate(model=model, dataloader=dataloader_valid, device=device,
                                log_filepath=log_save_dir_validation, epoch=epoch)
@@ -589,11 +622,11 @@ if __name__ == "__main__":
                 model_save_dir, 'traced_last.pt'))
 
         if (epoch < (
-                    args.prof_settings[0] +
-                    args.prof_settings[1] +
-                    args.prof_settings[2]) *
-                    args.prof_settings[3]
-                ) and args.profiling:
+            args.prof_settings[0] +
+            args.prof_settings[1] +
+            args.prof_settings[2]) *
+            args.prof_settings[3]
+            ) and args.profiling:
             prof.step()
 
     # add experiment hyperparameters

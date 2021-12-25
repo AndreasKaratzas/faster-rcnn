@@ -37,7 +37,9 @@ def train(
     epochs: int,
     epoch: int,
     log_filepath: str,
-    apex_activated: bool
+    apex_activated: bool,
+    dataloader_idx: int,
+    num_of_dataloaders: int
 ):
     model.train()
     metric_logger = MetricLogger(f_path=log_filepath, delimiter="  ")
@@ -51,9 +53,13 @@ def train(
     loss_objectness_acc = []
     loss_rpn_box_reg_acc = []
 
-    print(
-        f"\n\n\t{'Epoch':10}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
-    with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}') as pbar:
+    # initialize a logger
+    msg = ""
+
+    if dataloader_idx + 1 < 2:
+        print(
+            f"\n\n\t{'Epoch':10}{'subset':11}{'gpu_mem':15}{'lr':10}{'loss':10}{'cls':10}{'box':10}{'obj':10}{'rpn':10}")
+    with tqdm(total=len(dataloader), bar_format='{l_bar}{bar:25}{r_bar}{bar:-25b}') as pbar:
         for images, targets in metric_logger.log_every(dataloader, epoch + 1):
             images = list(image.to(device) for image in images)
             targets = [{k: v.to(device) for k, v in t.items()}
@@ -70,24 +76,22 @@ def train(
             loss_value = losses_reduced.item()
 
             if not math.isfinite(loss_value):
-                print("Loss is {}, stopping training".format(loss_value))
-                print(loss_dict_reduced)
-                sys.exit(1)
-
-            blockPrint()
-            optimizer.zero_grad()
-
-            if apex_activated:
-                with amp.scale_loss(losses, optimizer) as scaled_loss:
-                    scaled_loss.backward()
+                msg = msg + "Loss was {} at some point.\n".format(loss_value)
             else:
-                losses.backward()
+                blockPrint()
+                optimizer.zero_grad()
 
-            optimizer.step()
-            enablePrint()
+                if apex_activated:
+                    with amp.scale_loss(losses, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    losses.backward()
 
-            metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
-            metric_logger.update(lr=optimizer.param_groups[0]["lr"])
+                optimizer.step()
+                enablePrint()
+
+                metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
+                metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
             lr = optimizer.param_groups[0]["lr"]
             loss, loss_classifier, loss_box_reg, loss_objectness, loss_rpn_box_reg = metric_logger.get_metrics()
@@ -98,8 +102,10 @@ def train(
             loss_objectness_acc.append(loss_objectness)
             loss_rpn_box_reg_acc.append(loss_rpn_box_reg)
 
-            pbar.set_description(('%13s' + '%12s' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' * 3) % (
-                f'{epoch + 1}/{epochs}',
+            pbar.set_description(('%13s' + '%11s' + '%12s' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' * 3) % (
+                f'{epoch + 1}/{epochs}' if dataloader_idx +
+                1 < 2 else f'{" ".ljust(13)}',
+                f'{dataloader_idx + 1}/{num_of_dataloaders}',
                 f'{torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0:.3g}G',
                 lr, round(mean(loss_acc), 3), round(
                     mean(loss_classifier_acc), 3),
@@ -110,6 +116,9 @@ def train(
             pbar.update(1)
 
         pbar.close()
+
+    if len(msg) > 0:
+        print(msg)
 
     return \
         metric_logger, lr, \
@@ -139,11 +148,11 @@ def validate(
     coco_evaluator = CocoEvaluator(coco, iou_types, log_filepath, epoch + 1)
     enablePrint()
 
-    pbar = tqdm(dataloader, desc=f"{'               mAP@.5:.95':29}"
+    pbar = tqdm(dataloader, desc=f"{'                          mAP@.5:.95':40}"
                                  f"{'mAP@.5':11}{'mAP@.75':11}"
                                  f"{'mAP@s':10}{'mAP@m':10}"
                                  f"{'mAP@l':9}{'Recall':6}",
-                bar_format='{l_bar}{bar:35}{r_bar}{bar:-35b}')
+                bar_format='{l_bar}{bar:25}{r_bar}{bar:-25b}')
     for images, targets in pbar:
         images = list(image.to(device) for image in images)
 
@@ -167,7 +176,7 @@ def validate(
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
 
-    print(('%25.3g' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' + '%10.3g' + '%10.3g') % (
+    print(('%36.3g' + '%10.3g' + '%12.3g' + '%9.3g' + '%10.3g' + '%10.3g' + '%10.3g') % (
         coco_evaluator.stats[0], coco_evaluator.stats[1], coco_evaluator.stats[2], coco_evaluator.stats[3],
         coco_evaluator.stats[4], coco_evaluator.stats[5], np.mean(coco_evaluator.stats[6:])))
     torch.set_num_threads(n_threads)

@@ -129,7 +129,7 @@ class MetricLogger(object):
 
             if torch.cuda.is_available():
                 log_dict['memory'] = int(round(
-                    torch.cuda.memory_reserved() / 1E6))
+                    torch.cuda.memory_reserved() / 1E9))
             else:
                 log_dict['memory'] = 0
 

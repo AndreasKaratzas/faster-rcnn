@@ -20,6 +20,7 @@ from lib.presets import DetectionPresetTargetOnlyTorchVision
 IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
                'dng', 'webp', 'mpo']
 
+
 def _verify_lbl2img_path(args):
     img_file, lbl_file = args
     msg = ''
@@ -40,7 +41,7 @@ def _verify_lbl2img_path(args):
                 f.seek(-2, 2)
                 # if image is corrupt
                 if f.read() != b'\xff\xd9':
-                    # restore image file 
+                    # restore image file
                     ImageOps.exif_transpose(Image.open(img_file)).save(
                         img_file, 'JPEG', subsampling=0, quality=100)
                     msg += f'WARNING: {img_file}: corrupt JPEG restored and saved\n'
@@ -65,7 +66,7 @@ def _verify_lbl2img_path(args):
                 if len(dupl_idx_ndarray) < num_lbls:
                     # filter out duplicates
                     lbl = lbl[dupl_idx_ndarray]
-                    msg += f'WARNING: {img_file}: {num_lbls - len(dupl_idx_ndarray)} duplicate labels removed.\n'
+                    msg += f'WARNING: {img_file}: {num_lbls - len(dupl_idx_ndarray)} duplicate label(s) removed.\n'
             else:
                 raise ValueError(
                     f"Found empty label file. ID {Path(lbl_file).stem}.")
@@ -80,7 +81,6 @@ def _verify_lbl2img_path(args):
 
 def _load_image(self, img_idx: int):
     """Processes the `images` attribute of `CustomDetectionDataset` object
-
     Parameters
     ----------
     img_idx : int
@@ -115,20 +115,22 @@ class CustomCachedDetectionDataset(Dataset):
         self.cache_images_flag = cache_images_flag
         self.reduce_target = DetectionPresetTargetOnlyTorchVision(
             img_size=self.img_size)
-        
+
         self._fetch_img_files(root_dir=root_dir)
         self._fetch_lbl_files(img_files=self.img_files)
 
         cache_path = Path(root_dir).with_suffix('.cache')
         self._config_cache(cache_path=cache_path)
-        
+
     def _fetch_img_files(self, root_dir: str):
         f = glob.glob(str(Path(root_dir) / '**' / '*.*'), recursive=True)
-        self.img_files = sorted(x.replace('/', os.sep) for x in f if x.split('.')[-1].lower() in IMG_FORMATS)
+        self.img_files = sorted(x.replace('/', os.sep)
+                                for x in f if x.split('.')[-1].lower() in IMG_FORMATS)
 
     def _fetch_lbl_files(self, img_files: List[Path]):
         sa, sb = os.sep + 'images' + os.sep, os.sep + 'labels' + os.sep
-        self.lbl_files = [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[0] + '.txt' for x in img_files]
+        self.lbl_files = [sb.join(x.rsplit(sa, 1)).rsplit('.', 1)[
+            0] + '.txt' for x in img_files]
 
     def _get_hash(self):
         paths = self.img_files + self.lbl_files
@@ -136,7 +138,7 @@ class CustomCachedDetectionDataset(Dataset):
         h = hashlib.md5(str(size).encode())
         h.update(''.join(paths).encode())
         return h.hexdigest()
-    
+
     def _compute_image_placeholders(self):
         image_idx = 0
         # fetch if it does not exist
@@ -175,7 +177,7 @@ class CustomCachedDetectionDataset(Dataset):
             # index segment covered by each image placeholder
             self.img_idx_segment_per_placeholer = [np.sum(
                 self.img_per_placeholder_lst[:idx]) for idx in range(1, len(self.img_per_placeholder_lst) + 1)]
-            
+
     def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
 
@@ -200,10 +202,12 @@ class CustomCachedDetectionDataset(Dataset):
                         msgs.append(msg)
             pbar.close()
         else:
-            pbar = tqdm(zip(self.img_files, self.lbl_files), desc=desc, total=len(self.img_files), unit=" samples processed")
+            pbar = tqdm(zip(self.img_files, self.lbl_files), desc=desc,
+                        total=len(self.img_files), unit=" samples processed")
             for img_file, lbl_file in pbar:
                 # verify target files w.r.t. images found in the dataset
-                img_file, lbl, width, height, msg = _verify_lbl2img_path((img_file, lbl_file))
+                img_file, lbl, width, height, msg = _verify_lbl2img_path(
+                    (img_file, lbl_file))
                 # reduce target dimensions w.r.t. image dimensionality reduction ratio
                 lbl = self.reduce_target(
                     target=lbl, height=height, width=width)
@@ -231,7 +235,8 @@ class CustomCachedDetectionDataset(Dataset):
             _results = ThreadPool(self.num_threads).imap(
                 lambda x: _load_image(*x), zip(repeat(self, self.num_samples), range(self.num_samples)))
             # keep user informed with a TQDM bar
-            pbar = tqdm(enumerate(_results), total=self.num_samples, unit=" samples processed")
+            pbar = tqdm(enumerate(_results), total=self.num_samples,
+                        unit=" samples processed")
             # loop through samples
             for image_idx, image_sample in pbar:
                 # cache image
@@ -263,11 +268,10 @@ class CustomCachedDetectionDataset(Dataset):
                 pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f} GB RAM)"
             pbar.close()
 
-
     def _config_cache(self, cache_path: Path):
         # create cache
         cache = self._cache_labels(cache_path)
-        
+
         # extract labels (List[np.ndarray])
         self.labels = list(cache.values())
 
@@ -278,27 +282,28 @@ class CustomCachedDetectionDataset(Dataset):
 
         # configure hyperparameters
         self.num_samples = len(self.img_files)
-        self.batch_index = np.floor(np.arange(self.num_samples) / self.batch_size).astype(np.int64)
+        self.batch_index = np.floor(
+            np.arange(self.num_samples) / self.batch_size).astype(np.int64)
         self.num_batches = self.batch_index[-1] + 1
         self.sample_idxs = range(self.num_samples)
 
         # declare cache variable for images
         self.images = [None] * self.num_samples
 
-        # self._compute_image_placeholders()
+        self._compute_image_placeholders()
         # cache images
-        if self.cache_images_flag:
-            self._cache_images()
+        # if self.cache_images_flag:
+        # self._cache_images()
 
     def __getitem__(self, idx):
         img = _load_image(self, idx)
-        
+
         boxes = self.labels[idx]
         boxes = torch.as_tensor(boxes, dtype=torch.float64)
-        
+
         labels = torch.as_tensor(boxes[:, 0], dtype=torch.int64)
         boxes = torch.as_tensor(boxes[:, 1:], dtype=torch.float64)
-        
+
         if labels.ndim < 1:
             labels = labels.unsqueeze(0)
 
