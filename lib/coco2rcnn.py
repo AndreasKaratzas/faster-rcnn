@@ -136,13 +136,13 @@ class installCocoDataset:
                             self.res_dir, subset_id, "images", img_path))
                 
                 except IOError:
+                    os.remove(os.path.join(
+                        self.res_dir, subset_id, "images", img_path))
                     file_not_found_cntr += 1
 
             if rot_cntr > 0:
                 print(f"Number of images rotated: {rot_cntr}.\n")
             if file_not_found_cntr > 0:
-                os.remove(os.path.join(
-                    self.res_dir, subset_id, "images", img_path))
                 print(f"Deleted {file_not_found_cntr} images.\n")
 
     def install(self):
