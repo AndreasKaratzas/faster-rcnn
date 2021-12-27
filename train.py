@@ -141,7 +141,7 @@ if __name__ == "__main__":
         raise ValueError(
             f"Number of CNN backbone trainable layers must be an integer defined between 0 and 5.")
     
-    if args.auto_num_classes:
+    if args.auto_num_classes or args.num_classes is None:
         min_class, max_class = compute_num_classes(os.path.join(os.path.join(args.dataset, "train", "labels")))
         if min_class < 1:
             raise ValueError(f"Minimum class label found was {min_class}.\n\t"
@@ -320,7 +320,7 @@ if __name__ == "__main__":
         }
 
         data['dataset'] = {
-            'classes': args.num_classes,
+            'classes': int(args.num_classes),
             'img_size': args.img_size,
             'directory': args.dataset
         }
