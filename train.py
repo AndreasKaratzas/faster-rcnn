@@ -42,11 +42,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 if __name__ == "__main__":
 
-    try:
-        multiprocessing.set_start_method('spawn', force=True)
-    except RuntimeError:
-        print("Cannot set multiprocessing `spawn` option.")
-
     parser = argparse.ArgumentParser(
         description='PyTorch Detection with Faster R-CNN.')
     parser.add_argument('--root-dir', default='./data',
