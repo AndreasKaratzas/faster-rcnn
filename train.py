@@ -507,12 +507,18 @@ if __name__ == "__main__":
                 if thread_cacher_sub_1_started and not entered_case_flag:
                     thread_cacher_sub_1.join()
                     thread_cacher_sub_1_started = False
+                    # declare first thread cacher
+                    thread_cacher_sub_1 = threading.Thread(
+                        target=train_data._cache_images)
                     thread_cacher_sub_2.start()
                     thread_cacher_sub_2_started = True 
                     entered_case_flag = True
                 if thread_cacher_sub_2_started and not entered_case_flag:
                     thread_cacher_sub_2.join()
                     thread_cacher_sub_2_started = False
+                    # declare second thread cacher
+                    thread_cacher_sub_2 = threading.Thread(
+                        target=train_data._cache_images)
                     thread_cacher_sub_1.start()
                     thread_cacher_sub_1_started = True
                     entered_case_flag = True
