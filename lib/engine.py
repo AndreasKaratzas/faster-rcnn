@@ -1,20 +1,19 @@
 
-import sys
 import math
+import sys
 import time
-import torch
-import numpy as np
-import torchvision
-from apex import amp
-from tqdm import tqdm
 from statistics import mean
 
-from coco.coco_utils import get_coco_api_from_dataset
-from lib.utils import reduce_dict, blockPrint, enablePrint
-
-
+import numpy as np
+import torch
+import torchvision
+from apex import amp
 from coco.coco_eval import CocoEvaluator
+from coco.coco_utils import get_coco_api_from_dataset
+from tqdm import tqdm
+
 from lib.metrics import MetricLogger, SmoothedValue
+from lib.utils import blockPrint, enablePrint, reduce_dict
 
 
 def _get_iou_types(model):

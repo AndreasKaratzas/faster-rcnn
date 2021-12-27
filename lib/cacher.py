@@ -1,23 +1,22 @@
 
+import glob
+import hashlib
 import os
 import re
-import glob
-import psutil
-import torch
-import hashlib
-from multiprocessing.pool import Pool, ThreadPool
-import numpy as np
-
-from tqdm import tqdm
-from typing import List
-from pathlib import Path
 from collections import deque
 from itertools import repeat
+from multiprocessing.pool import ThreadPool
+from pathlib import Path
+from typing import List
+
+import numpy as np
+import psutil
+import torch
 from PIL import Image, ImageOps
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 from lib.presets import DetectionPresetTargetOnlyTorchVision
-
 
 IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
                'dng', 'webp', 'mpo']
@@ -82,7 +81,7 @@ def _verify_lbl2img_path(args):
             f"Image and/or label file is corrupt regarding sample with ID {Path(img_file).stem}.")
 
 
-def _load_image(self, img_idx: int, caching = True):
+def _load_image(self, img_idx: int):
     """Processes the `images` attribute of `CustomDetectionDataset` object
     Parameters
     ----------
@@ -93,20 +92,6 @@ def _load_image(self, img_idx: int, caching = True):
         # if img exists in cache
         return self.images[img_idx]
     else:
-        if not caching:
-            cntr = 0
-            min_idx = 1000000
-            max_idx = 0
-            for idx, img in enumerate(self.images):
-                if img is not None:
-                    cntr += 1
-                    if min_idx > idx:
-                        min_idx = idx
-                    if max_idx < idx:
-                        max_idx = idx
-            print(f"Cached from {min_idx} to {max_idx}.")
-            print(f"{cntr} images cached.")
-            print(f"{img_idx} NOT CACHED !!!")
         # fetch if it does not exist
         img_path = self.img_files[img_idx]
         # load image sample
@@ -382,7 +367,7 @@ class CustomCachedDetectionDataset(Dataset):
             self._cache_images(verbose=True)
 
     def __getitem__(self, idx):
-        img = _load_image(self, idx, caching=False)
+        img = _load_image(self, idx)
 
         boxes = self.labels[idx]
         boxes = torch.as_tensor(boxes, dtype=torch.float64)

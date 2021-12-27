@@ -1,14 +1,14 @@
 
-from tqdm import tqdm
-import numpy as np
-from typing import List
-from pathlib import Path
-from PIL import Image
-import zipfile
-import shutil
 import os
-import json
+import shutil
+import zipfile
+from pathlib import Path
+from typing import List
+
+import numpy as np
 import wget
+from PIL import Image
+from tqdm import tqdm
 
 
 class installCocoDataset:

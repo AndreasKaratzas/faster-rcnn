@@ -1,9 +1,9 @@
 
 import time
+from collections import defaultdict, deque
+
 import torch
 import torch.distributed as dist
-
-from collections import deque, defaultdict
 
 from lib.utils import is_dist_avail_and_initialized
 

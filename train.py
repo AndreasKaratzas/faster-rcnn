@@ -4,13 +4,12 @@ import copy
 import datetime
 import json
 import math
+import multiprocessing
 import os
 import platform
-import warnings
 import threading
-import multiprocessing
+import warnings
 from pathlib import Path
-from collections import deque
 
 import torch
 import torch.optim as optim
