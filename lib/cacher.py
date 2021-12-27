@@ -5,7 +5,7 @@ import glob
 import psutil
 import torch
 import hashlib
-import multiprocessing
+from multiprocessing.pool import Pool, ThreadPool
 import numpy as np
 
 from tqdm import tqdm
@@ -124,11 +124,6 @@ class CustomCachedDetectionDataset(Dataset):
         # Solves "OSError: Too many open files."
         torch.multiprocessing.set_sharing_strategy('file_system')
 
-        try:
-            torch.multiprocessing.set_start_method("spawn", force=True)
-        except RuntimeError:
-            print("Cannot set torch.multiprocessing `spawn` option.")
-
         self.root_dir = root_dir
         self.transforms = transforms
         self.num_threads = num_threads
@@ -214,7 +209,7 @@ class CustomCachedDetectionDataset(Dataset):
         desc = f"Scanning '{Path(cache_path.parent.name) / Path(cache_path.stem)}' directory for images and labels"
 
         if self.num_threads > 1:
-            with multiprocessing.pool.Pool(self.num_threads) as pool:
+            with ThreadPool(self.num_threads) as pool:
                 pbar = tqdm(pool.imap(_verify_lbl2img_path, zip(
                     self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files), unit=" samples processed")
                 # verify target files w.r.t. images found in the dataset
@@ -264,7 +259,7 @@ class CustomCachedDetectionDataset(Dataset):
         # cache in a subset
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
-            _results = multiprocessing.pool.ThreadPool(self.num_threads).imap(
+            _results = ThreadPool(self.num_threads).imap(
                 lambda x: _load_image(*x), zip(
                     repeat(
                         self, 
