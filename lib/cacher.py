@@ -1,18 +1,20 @@
 
 import os
+import re
 import glob
 import psutil
 import torch
 import hashlib
+import multiprocessing
 import numpy as np
 
 from tqdm import tqdm
 from typing import List
 from pathlib import Path
+from collections import deque
 from itertools import repeat
 from PIL import Image, ImageOps
 from torch.utils.data import Dataset
-from multiprocessing.pool import Pool, ThreadPool
 
 from lib.presets import DetectionPresetTargetOnlyTorchVision
 
@@ -23,7 +25,7 @@ IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
 
 def _verify_lbl2img_path(args):
     img_file, lbl_file = args
-    msg = ''
+    msg = ' '
 
     try:
         # load image
@@ -44,7 +46,7 @@ def _verify_lbl2img_path(args):
                     # restore image file
                     ImageOps.exif_transpose(Image.open(img_file)).save(
                         img_file, 'JPEG', subsampling=0, quality=100)
-                    msg += f'WARNING: {img_file}: corrupt JPEG restored and saved\n'
+                    msg += f'WARNING: image with ID {str(Path(img_file).stem)}: corrupt JPEG restored and saved.\n'
         # verify labels
         if os.path.isfile(lbl_file):
             # load labels
@@ -66,20 +68,21 @@ def _verify_lbl2img_path(args):
                 if len(dupl_idx_ndarray) < num_lbls:
                     # filter out duplicates
                     lbl = lbl[dupl_idx_ndarray]
-                    msg += f'WARNING: {img_file}: {num_lbls - len(dupl_idx_ndarray)} duplicate label(s) removed.\n'
+                    msg += f'WARNING: image with ID {str(Path(img_file).stem)}: {num_lbls - len(dupl_idx_ndarray)} duplicate label(s) removed.\n'
             else:
                 raise ValueError(
                     f"Found empty label file. ID {Path(lbl_file).stem}.")
         # label file was not found
         else:
-            raise ValueError(f"Missing label file for image {img_file}.")
+            raise ValueError(
+                f"Missing label file for image with ID {str(Path(img_file).stem)}.")
         return img_file, lbl, width, height, msg
     except Exception as e:
         raise AttributeError(
             f"Image and/or label file is corrupt regarding sample with ID {Path(img_file).stem}.")
 
 
-def _load_image(self, img_idx: int):
+def _load_image(self, img_idx: int, caching = True):
     """Processes the `images` attribute of `CustomDetectionDataset` object
     Parameters
     ----------
@@ -90,6 +93,20 @@ def _load_image(self, img_idx: int):
         # if img exists in cache
         return self.images[img_idx]
     else:
+        if not caching:
+            cntr = 0
+            min_idx = 1000000
+            max_idx = 0
+            for idx, img in enumerate(self.images):
+                if img is not None:
+                    cntr += 1
+                    if min_idx > idx:
+                        min_idx = idx
+                    if max_idx < idx:
+                        max_idx = idx
+            print(f"Cached from {min_idx} to {max_idx}.")
+            print(f"{cntr} images cached.")
+            print(f"{img_idx} NOT CACHED !!!")
         # fetch if it does not exist
         img_path = self.img_files[img_idx]
         # load image sample
@@ -106,6 +123,11 @@ class CustomCachedDetectionDataset(Dataset):
     def __init__(self, root_dir, num_threads: int = 8, batch_size: int = 16, img_size: int = 640, transforms=None, cache_images_flag: bool = True):
         # Solves "OSError: Too many open files."
         torch.multiprocessing.set_sharing_strategy('file_system')
+
+        try:
+            torch.multiprocessing.set_start_method("spawn", force=True)
+        except RuntimeError:
+            print("Cannot set torch.multiprocessing `spawn` option.")
 
         self.root_dir = root_dir
         self.transforms = transforms
@@ -177,6 +199,14 @@ class CustomCachedDetectionDataset(Dataset):
             # index segment covered by each image placeholder
             self.img_idx_segment_per_placeholer = [np.sum(
                 self.img_per_placeholder_lst[:idx]) for idx in range(1, len(self.img_per_placeholder_lst) + 1)]
+            # segments with indexes corresponding to every image placeholder
+            self.segments_with_indexes_per_img_placeholder = [list(np.arange(
+                self.img_idx_segment_per_placeholer[idx - 1], self.img_idx_segment_per_placeholer[idx])) 
+                for idx in range(1, len(self.img_idx_segment_per_placeholer))
+            ]
+            # initialize a container with subset indexes to be cached
+            self.subset_to_be_cached_idx = deque(
+                range(len(self.segments_with_indexes_per_img_placeholder)))
 
     def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
@@ -184,7 +214,7 @@ class CustomCachedDetectionDataset(Dataset):
         desc = f"Scanning '{Path(cache_path.parent.name) / Path(cache_path.stem)}' directory for images and labels"
 
         if self.num_threads > 1:
-            with Pool(self.num_threads) as pool:
+            with multiprocessing.pool.Pool(self.num_threads) as pool:
                 pbar = tqdm(pool.map(_verify_lbl2img_path, zip(
                     self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files), unit=" samples processed")
                 # verify target files w.r.t. images found in the dataset
@@ -221,56 +251,112 @@ class CustomCachedDetectionDataset(Dataset):
                     msgs.append(msg)
             pbar.close()
 
-        # print warnings
-        if msgs:
-            print(f"{' '.join(msgs)}")
+        return x, msgs
 
-        return x
-
-    def _cache_images(self):
+    def _cache_images(self, verbose: bool = False):
         # register memory allocated in RAM
         _allocated_mem = 0
+        # delete second from last subset from cache
+        self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[-2]][0]:
+                    self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[-2]][-1]] = [None] * (
+                    self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[-2]][-1] -
+                    self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[-2]][0])
+        # cache in a subset
         if self.num_threads > 1:
             # initialize multithreaded image fetching operation
-            _results = ThreadPool(self.num_threads).imap(
-                lambda x: _load_image(*x), zip(repeat(self, self.num_samples), range(self.num_samples)))
-            # keep user informed with a TQDM bar
-            pbar = tqdm(enumerate(_results), total=self.num_samples,
-                        unit=" samples processed")
-            # loop through samples
-            for image_idx, image_sample in pbar:
-                # cache image
-                self.images[image_idx] = image_sample
-                # update allocated memory register
-                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
-                # update RAM status
-                pbar.desc = f"Caching images ({_allocated_mem / 1E9: .3f} GB RAM)"
-            pbar.close()
+            _results = multiprocessing.pool.ThreadPool(self.num_threads).imap(
+                lambda x: _load_image(*x), zip(
+                    repeat(
+                        self, 
+                        self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][-1] -
+                        self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][0] + 1
+                    ), 
+                    range(
+                        self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][0],
+                        self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][-1] + 1)
+                )
+            )
+            if verbose:
+                # keep user informed with a TQDM bar
+                pbar = tqdm(enumerate(_results), 
+                            total=self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][-1] -
+                            self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][0] + 1,
+                            unit=" samples processed")
+                # loop through samples
+                for image_idx, image_sample in pbar:
+                    # cache image
+                    self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]]
+                                [image_idx]] = image_sample
+                    # update allocated memory register
+                    _allocated_mem += np.asarray(
+                        self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]]).nbytes
+                    # update RAM status
+                    pbar.desc = f"Caching images ({(self._init_allocated_mem + _allocated_mem) / 1E9: .3f} GB RAM)"
+                pbar.close()
+            else:
+                # loop through samples
+                for image_idx, image_sample in enumerate(_results):
+                    # cache image
+                    self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]]
+                                            [image_idx]] = image_sample
         else:
-            # keep user informed with a TQDM bar
-            pbar = tqdm(range(self.num_samples), total=self.num_samples,
-                        unit=" samples processed")
-            # initialize single threaded image fetching operation
-            for image_idx in pbar:
-                # fetch if it does not exist
-                img_path = self.img_files[image_idx]
-                # load image sample
-                img = Image.open(img_path).convert("RGB")
-                # reduce image dimensions
-                img = img.resize((self.img_size, self.img_size), Image.NEAREST)
-                # assert error if image was not found
-                assert img is not None, f'Image Not Found {image_idx}'
-                # cache image
-                self.images[image_idx] = img
-                # update allocated memory register
-                _allocated_mem += np.asarray(self.images[image_idx]).nbytes
-                # update RAM status
-                pbar.desc = f"Caching images({_allocated_mem / 1E9: .3f} GB RAM)"
-            pbar.close()
+            if verbose:
+                # keep user informed with a TQDM bar
+                pbar = tqdm(range(
+                            self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][0],
+                            self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][-1] + 1),
+                            total=self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][-1] -
+                            self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][0] + 1,
+                            unit=" samples processed")
+                # initialize single threaded image fetching operation
+                for image_idx in pbar:
+                    # fetch if it does not exist
+                    img_path = self.img_files[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]]
+                    # load image sample
+                    img = Image.open(img_path).convert("RGB")
+                    # reduce image dimensions
+                    img = img.resize((self.img_size, self.img_size), Image.NEAREST)
+                    # assert error if image was not found
+                    assert img is not None, f'Image Not Found {self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]}'
+                    # cache image
+                    self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]] = img
+                    # update allocated memory register
+                    _allocated_mem += np.asarray(
+                        self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]]).nbytes
+                    # update RAM status
+                    pbar.desc = f"Caching images({(self._init_allocated_mem + _allocated_mem) / 1E9: .3f} GB RAM)"
+                pbar.close()
+            else:
+                # initialize single threaded image fetching operation
+                for image_idx in range(
+                        self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][0],
+                        self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][-1] + 1):
+                    # fetch if it does not exist
+                    img_path = self.img_files[image_idx]
+                    # load image sample
+                    img = Image.open(img_path).convert("RGB")
+                    # reduce image dimensions
+                    img = img.resize(
+                        (self.img_size, self.img_size), Image.NEAREST)
+                    # assert error if image was not found
+                    assert img is not None, f'Image Not Found {image_idx}'
+                    # cache image
+                    self.images[image_idx] = img
+        # update previously allocated space register
+        self._init_allocated_mem = _allocated_mem
+        # rotate negatively the container with subset indexes to be cached
+        self.subset_to_be_cached_idx.rotate(-1)
 
     def _config_cache(self, cache_path: Path):
         # create cache
-        cache = self._cache_labels(cache_path)
+        cache, msgs = self._cache_labels(cache_path)
+
+        # print warnings
+        if msgs:
+            msgs = "".join(msgs)
+            msgs = re.sub(' +', ' ', msgs)
+            msgs = re.sub('\n+', '\n', msgs)
+            print(f"{msgs}")
 
         # extract labels (List[np.ndarray])
         self.labels = list(cache.values())
@@ -291,12 +377,17 @@ class CustomCachedDetectionDataset(Dataset):
         self.images = [None] * self.num_samples
 
         self._compute_image_placeholders()
+        # register previously allocated memory space
+        self._init_allocated_mem = 0
         # cache images
-        # if self.cache_images_flag:
-        # self._cache_images()
+        if self.cache_images_flag:
+            # cache first subset
+            self._cache_images(verbose=True)
+            # cache second subset
+            self._cache_images(verbose=True)
 
     def __getitem__(self, idx):
-        img = _load_image(self, idx)
+        img = _load_image(self, idx, caching=False)
 
         boxes = self.labels[idx]
         boxes = torch.as_tensor(boxes, dtype=torch.float64)

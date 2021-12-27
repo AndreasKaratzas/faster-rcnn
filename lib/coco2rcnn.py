@@ -178,7 +178,7 @@ class installCocoDataset:
                         if label.ndim < 2:
                             label = label.reshape(1, -1)
 
-                        classes = np.array(label[:, 0]).astype(int)
+                        classes = np.array(label[:, 0]).astype(int) + 1
                         x_center = np.array(label[:, 1] * width).reshape(1, -1)
                         y_center = np.array(
                             label[:, 2] * height).reshape(1, -1)

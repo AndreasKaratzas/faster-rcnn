@@ -53,8 +53,8 @@ def train(
     loss_objectness_acc = []
     loss_rpn_box_reg_acc = []
 
-    # initialize a logger
-    msg = ""
+    # initialize a counter for model failure
+    loss_not_finite = 0
 
     if dataloader_idx + 1 < 2:
         print(
@@ -76,7 +76,7 @@ def train(
             loss_value = losses_reduced.item()
 
             if not math.isfinite(loss_value):
-                msg = msg + "Loss was {} at some point.\n".format(loss_value)
+                loss_not_finite += 1
             else:
                 blockPrint()
                 optimizer.zero_grad()
@@ -117,8 +117,8 @@ def train(
 
         pbar.close()
 
-    if len(msg) > 0:
-        print(msg)
+    if loss_not_finite > 0:
+        print(f"Loss was not finite {loss_not_finite} times.\n")
 
     return \
         metric_logger, lr, \
