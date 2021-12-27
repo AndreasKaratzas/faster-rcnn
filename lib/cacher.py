@@ -215,7 +215,7 @@ class CustomCachedDetectionDataset(Dataset):
 
         if self.num_threads > 1:
             with multiprocessing.pool.Pool(self.num_threads) as pool:
-                pbar = tqdm(pool.map(_verify_lbl2img_path, zip(
+                pbar = tqdm(pool.imap(_verify_lbl2img_path, zip(
                     self.img_files, self.lbl_files)), desc=desc, total=len(self.img_files), unit=" samples processed")
                 # verify target files w.r.t. images found in the dataset
                 for img_file, lbl, width, height, msg in pbar:
@@ -311,18 +311,18 @@ class CustomCachedDetectionDataset(Dataset):
                 # initialize single threaded image fetching operation
                 for image_idx in pbar:
                     # fetch if it does not exist
-                    img_path = self.img_files[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]]
+                    img_path = self.img_files[image_idx]
                     # load image sample
                     img = Image.open(img_path).convert("RGB")
                     # reduce image dimensions
                     img = img.resize((self.img_size, self.img_size), Image.NEAREST)
                     # assert error if image was not found
-                    assert img is not None, f'Image Not Found {self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]}'
+                    assert img is not None, f'Image Not Found {image_idx}'
                     # cache image
-                    self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]] = img
+                    self.images[image_idx] = img
                     # update allocated memory register
                     _allocated_mem += np.asarray(
-                        self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]]).nbytes
+                        self.images[image_idx]).nbytes
                     # update RAM status
                     pbar.desc = f"Caching images({(self._init_allocated_mem + _allocated_mem) / 1E9: .3f} GB RAM)"
                 pbar.close()
