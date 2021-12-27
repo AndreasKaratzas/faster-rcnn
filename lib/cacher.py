@@ -105,7 +105,7 @@ def _load_image(self, img_idx: int):
 
 
 class CustomCachedDetectionDataset(Dataset):
-    def __init__(self, root_dir, num_threads: int = 8, batch_size: int = 16, img_size: int = 640, transforms=None, cache_images_flag: bool = True):
+    def __init__(self, root_dir, num_threads: int = 8, batch_size: int = 16, img_size: int = 640, transforms=None, cache_images_flag: bool = True, cache_ratio: float = .5):
         # Solves "OSError: Too many open files."
         torch.multiprocessing.set_sharing_strategy('file_system')
 
@@ -115,6 +115,7 @@ class CustomCachedDetectionDataset(Dataset):
         self.batch_size = batch_size
         self.img_size = img_size
         self.cache_images_flag = cache_images_flag
+        self.cache_ratio = cache_ratio
         self.reduce_target = DetectionPresetTargetOnlyTorchVision(
             img_size=self.img_size)
 
@@ -154,10 +155,10 @@ class CustomCachedDetectionDataset(Dataset):
         # get ram requirements for a single sample
         _allocated_mem = np.asarray(img).nbytes
         # get total ram memory
-        _available_ram_space = psutil.virtual_memory().available * 0.3
+        _available_ram_space = psutil.virtual_memory().available * self.cache_ratio
         # compute expected ram requirements
         _expected_ram_reqs = np.ceil(
-            self.num_samples * _allocated_mem * 1.1)
+            self.num_samples * _allocated_mem)
         # estimate number of image placeholders
         self.num_of_image_placeholders = np.ceil(
             _expected_ram_reqs / _available_ram_space).astype(int)

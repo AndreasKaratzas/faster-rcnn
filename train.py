@@ -20,6 +20,7 @@ from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
 from lib.autoanchor import autoanchors
+from lib.autoclasses import compute_num_classes
 from lib.cacher import CustomCachedDetectionDataset
 from lib.elitism import EliteModel
 from lib.engine import train, validate
@@ -72,6 +73,8 @@ if __name__ == "__main__":
                         help='Resume from given checkpoint. Expecting filepath to checkpoint.')
     parser.add_argument('--cache', action='store_true',
                         help='Cache the images found in the dataset.')
+    parser.add_argument('--cache-ratio', default=0.5, type=float,
+                        help='Cache a percentage of images to avoid filling the whole RAM.')
     parser.add_argument('--profiling', action='store_true',
                         help='Profile the training loop.')
     parser.add_argument('--prof-settings', default=[
@@ -97,6 +100,8 @@ if __name__ == "__main__":
                                        f'(min: 0, max: 5, default: 3).')
     parser.add_argument('--opt-level', default='O3',
                         help='Optimization level for mixed precision model training (default: O3).')
+    parser.add_argument('--auto-num-classes', action='store_true',
+                        help='Enable to compute on the fly the number of classes for a dataset.')
     parser.add_argument('--no-mixed-precision', action='store_true',
                         help='Disable mixed precision for model training.')
     parser.add_argument('--no-visual', action='store_true',
@@ -135,6 +140,15 @@ if __name__ == "__main__":
     if args.trainable_layers > 5 or args.trainable_layers < 0:
         raise ValueError(
             f"Number of CNN backbone trainable layers must be an integer defined between 0 and 5.")
+    
+    if args.auto_num_classes:
+        min_class, max_class = compute_num_classes(os.path.join(os.path.join(args.dataset, "train", "labels")))
+        if min_class < 1:
+            raise ValueError(f"Minimum class label found was {min_class}.\n\t"
+                             f"Minimum class label must be equal to 1 and "
+                             f"\n\t0 is reserved for background classification.")
+        args.num_classes = max_class + 1
+        print(f"Number of classes found is {args.num_classes}.")
 
     # check platform and reconfigure number of workers
     if platform.system() == "Linux" and args.no_threading_linux:
@@ -170,6 +184,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         img_size=args.img_size,
         cache_images_flag=args.cache,
+        cache_ratio=args.cache_ratio,
         transforms=get_transform(
             transform_class="train",
             img_size=args.img_size)
@@ -182,6 +197,7 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         img_size=args.img_size,
         cache_images_flag=args.cache if train_data.num_of_image_placeholders < 2 else False,
+        cache_ratio=args.cache_ratio,
         transforms=get_transform(
             transform_class="valid",
             img_size=args.img_size
@@ -426,7 +442,7 @@ if __name__ == "__main__":
     # split dataset into memory friendly dataloaders
     dataloader_train_idx = torch.randperm(len(train_data))
     # register training dataloaders
-    if train_data.num_of_image_placeholders > 1:
+    if train_data.num_of_image_placeholders > 1 and args.cache:
         for subset in range(1, len(train_data.img_idx_segment_per_placeholer)):
             # split dataset into memory friendly dataloaders
             dataloader_sub_train_idx = torch.randperm(
@@ -489,7 +505,7 @@ if __name__ == "__main__":
             train_logger, lr, loss_acc, loss_classifier_acc, loss_box_reg_acc, loss_objectness_acc, loss_rpn_box_reg_acc = train(
                 model=model, optimizer=optimizer, dataloader=dataloader_train, device=device, epochs=args.epochs,
                 epoch=epoch, log_filepath=log_save_dir_train, apex_activated=not args.no_mixed_precision,
-                dataloader_idx=idx, num_of_dataloaders=train_data.num_of_image_placeholders)
+                dataloader_idx=idx, num_of_dataloaders=train_data.num_of_image_placeholders if args.cache else 1)
             train_logger.export_data()
 
             writer.add_scalar('lr/train', lr, epoch)
