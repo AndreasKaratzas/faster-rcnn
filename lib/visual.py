@@ -1,11 +1,11 @@
 
+import random
 from pathlib import Path
 from typing import List
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import random
 import torchvision.transforms.functional as F
 from PIL import ImageColor
 from torchvision.transforms.functional import convert_image_dtype

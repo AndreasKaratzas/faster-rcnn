@@ -154,7 +154,7 @@ class CustomCachedDetectionDataset(Dataset):
         # get ram requirements for a single sample
         _allocated_mem = np.asarray(img).nbytes
         # get total ram memory
-        _available_ram_space = psutil.virtual_memory().available * 0.6
+        _available_ram_space = psutil.virtual_memory().available * 0.4
         # compute expected ram requirements
         _expected_ram_reqs = np.ceil(
             self.num_samples * _allocated_mem * 1.1)

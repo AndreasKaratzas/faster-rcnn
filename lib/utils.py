@@ -1,14 +1,16 @@
 
+import hashlib
 import os
 import sys
-import torch
-import hashlib
-import torch.nn as nn
-import torch.distributed as dist
-
 from typing import List, Tuple
 
-from lib.presets import DetectionPresetTrainTorchVision, DetectionPresetEvalTorchVision, DetectionPresetTestTorchVision
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+
+from lib.presets import (DetectionPresetEvalTorchVision,
+                         DetectionPresetTestTorchVision,
+                         DetectionPresetTrainTorchVision)
 
 
 def colorstr(options, string_args):
