@@ -1,5 +1,6 @@
 # TODO
 
+* Parametrize chunk percentage with respect to available RAM space
 * Add sub-dataset feature and load 2 sub-datasets to RAM memory for larger dataset manipulation
 * Automate class number (`num_classes`) generation
 * Add an `experiments` script with all experiments run to counter YOLOv5
