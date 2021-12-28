@@ -10,6 +10,8 @@ import wget
 from PIL import Image
 from tqdm import tqdm
 
+from lib.utils import colorstr
+
 
 class installCocoDataset:
     def __init__(self, urls: List[str], res_dir: str):
@@ -141,9 +143,11 @@ class installCocoDataset:
                     file_not_found_cntr += 1
 
             if rot_cntr > 0:
-                print(f"Number of images rotated: {rot_cntr}.\n")
+                print(
+                    f"Number of images rotated: {colorstr(options=['red', 'underline'], string_args=list([str(rot_cntr)]))}.\n")
             if file_not_found_cntr > 0:
-                print(f"Deleted {file_not_found_cntr} images.\n")
+                print(
+                    f"Deleted {colorstr(options=['red', 'underline'], string_args=list([str(file_not_found_cntr)]))} images.\n")
 
     def install(self):
         subsets = ['train', 'valid']
@@ -208,7 +212,8 @@ class installCocoDataset:
                     cntr += 1
             
             if cntr > 0:
-                print(f"Number of files not found: {cntr}.\n")
+                print(
+                    f"Number of files not found: {colorstr(options=['red', 'underline'], string_args=list([str(cntr)]))}.\n")
             else:
                 print(f"All files were found.")
 
@@ -224,12 +229,17 @@ class installCocoDataset:
         self.preprocess()
 
 
-url_train_imgs = "http://images.cocodataset.org/zips/train2017.zip"
-url_valid_imgs = "http://images.cocodataset.org/zips/val2017.zip"
-url_lbls = "https://github.com/ultralytics/yolov5/releases/download/v1.0/coco2017labels.zip"
+def main():
+    url_train_imgs = "http://images.cocodataset.org/zips/train2017.zip"
+    url_valid_imgs = "http://images.cocodataset.org/zips/val2017.zip"
+    url_lbls = "https://github.com/ultralytics/yolov5/releases/download/v1.0/coco2017labels.zip"
 
-res_dir = Path("../datasets/coco")
+    res_dir = Path("../datasets/coco")
 
-coco_installer = installCocoDataset(
-    urls=[url_train_imgs, url_valid_imgs, url_lbls], res_dir=res_dir)
-coco_installer.driver()
+    coco_installer = installCocoDataset(
+        urls=[url_train_imgs, url_valid_imgs, url_lbls], res_dir=res_dir)
+    coco_installer.driver()
+
+
+if __name__ == "__main__":
+    main()

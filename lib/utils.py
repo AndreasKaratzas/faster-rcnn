@@ -34,7 +34,7 @@ def colorstr(options, string_args):
     [type]
         [description]
     """
-    # Colors a string https://en.wikipedia.org/wiki/ANSI_escape_code, i.e.  colorstr('blue', 'hello world')
+    # Colors a string https://en.wikipedia.org/wiki/ANSI_escape_code
     colors = {'black':          '\033[30m', # basic colors
               'red':            '\033[31m',
               'green':          '\033[32m',

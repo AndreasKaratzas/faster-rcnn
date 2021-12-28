@@ -1,5 +1,4 @@
 
-from statistics import mean
 from typing import List, Tuple
 
 import numpy as np
@@ -8,13 +7,16 @@ from sklearn.neighbors import KernelDensity
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from lib.utils import colorstr
+
 
 def autoanchors(
     dataloader: DataLoader,
     n_anchors: int = 5,
     outlier_segment: float = 5e-2,
     bandwidth: float = 7e-1,
-    outlier_threshold: float = -95e-2
+    outlier_threshold: float = -95e-2,
+    verbose: bool = False
 ) -> Tuple[List[float], List[float]]:
     # parse box areas and register anchors
     anchors, aspects, init_flag = None, None, True
@@ -85,8 +87,11 @@ def autoanchors(
     anchor_filtered_n_samples = anchors.shape[0]
     aspect_filtered_n_samples = aspects.shape[0]
 
-    print(f"\nRemoved {anchor_raw_n_samples - anchor_filtered_n_samples} samples out of {anchor_raw_n_samples} from anchor candidates.")
-    print(f"Removed {aspect_raw_n_samples - aspect_filtered_n_samples} samples out of {aspect_raw_n_samples} from aspect candidates.\n")
+    if verbose:
+        print(f"\nRemoved {anchor_raw_n_samples - anchor_filtered_n_samples} "
+              f"samples out of {anchor_raw_n_samples} from anchor candidates.")
+        print(f"Removed {aspect_raw_n_samples - aspect_filtered_n_samples} "
+              f"samples out of {aspect_raw_n_samples} from aspect candidates.\n")
 
     # estimate best anchor sizes
     anchor_sizes = []
@@ -116,8 +121,10 @@ def autoanchors(
 
     if max(anchor_sizes) - min(anchor_sizes) < 10.0 or min(anchor_sizes) < 4.0:
 
-        print(f"WARNING: You should consider increasing "
-              f"`img_size` hyperparameter to gain more "
+        print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
+              f"You should consider increasing "
+              f"{colorstr(options=['red', 'underline'], string_args=list(['img_size']))} "
+              f"hyperparameter to gain more "
               f"prediction accuracy.")
 
     return anchor_sizes, aspect_ratios

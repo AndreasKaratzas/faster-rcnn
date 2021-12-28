@@ -13,7 +13,7 @@ from coco.coco_utils import get_coco_api_from_dataset
 from tqdm import tqdm
 
 from lib.metrics import MetricLogger, SmoothedValue
-from lib.utils import blockPrint, enablePrint, reduce_dict
+from lib.utils import blockPrint, enablePrint, reduce_dict, colorstr
 
 
 def _get_iou_types(model):
@@ -117,7 +117,8 @@ def train(
         pbar.close()
 
     if loss_not_finite > 0:
-        print(f"Loss was not finite {loss_not_finite} times.\n")
+        print(
+            f"Loss was not finite {colorstr(options=['red', 'underline'], string_args=list([str(loss_not_finite)]))} times.\n")
 
     return \
         metric_logger, lr, \

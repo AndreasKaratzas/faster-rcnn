@@ -16,6 +16,7 @@ from PIL import Image, ImageOps
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
+from lib.utils import colorstr
 from lib.presets import DetectionPresetTargetOnlyTorchVision
 
 IMG_FORMATS = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff',
@@ -45,7 +46,9 @@ def _verify_lbl2img_path(args):
                     # restore image file
                     ImageOps.exif_transpose(Image.open(img_file)).save(
                         img_file, 'JPEG', subsampling=0, quality=100)
-                    msg += f'WARNING: image with ID {str(Path(img_file).stem)}: corrupt JPEG restored and saved.\n'
+                    msg += f'{colorstr(options=["cyan"], string_args=list(["WARNING"]))}: ' + \
+                    f'image with ID {colorstr(options=["red", "underline"], string_args=list([str(Path(img_file).stem)]))}: ' + \
+                    f'corrupt JPEG restored and saved.\n'
         # verify labels
         if os.path.isfile(lbl_file):
             # load labels
@@ -67,7 +70,10 @@ def _verify_lbl2img_path(args):
                 if len(dupl_idx_ndarray) < num_lbls:
                     # filter out duplicates
                     lbl = lbl[dupl_idx_ndarray]
-                    msg += f'WARNING: image with ID {str(Path(img_file).stem)}: {num_lbls - len(dupl_idx_ndarray)} duplicate label(s) removed.\n'
+                    msg += f'{colorstr(options=["cyan"], string_args=list(["WARNING"]))}: ' + \
+                    f'image with ID {colorstr(options=["red", "underline"], string_args=list([str(Path(img_file).stem)]))}: ' + \
+                    f'{colorstr(options=["red", "underline"], string_args=list([str(num_lbls - len(dupl_idx_ndarray))]))} ' + \
+                    f'duplicate label(s) removed.\n'
             else:
                 raise ValueError(
                     f"Found empty label file. ID {Path(lbl_file).stem}.")
@@ -192,7 +198,9 @@ class CustomCachedDetectionDataset(Dataset):
     def _cache_labels(self, cache_path: Path):
         x, msgs = {}, []
 
-        desc = f"Scanning '{Path(cache_path.parent.name) / Path(cache_path.stem)}' directory for images and labels"
+        desc = f"Scanning "
+        f"{colorstr(options=['red', 'underline'], string_args=list([str(Path(cache_path.parent.name) / Path(cache_path.stem))]))} "
+        f"directory for images and labels"
 
         if self.num_threads > 1:
             with ThreadPool(self.num_threads) as pool:
@@ -272,7 +280,7 @@ class CustomCachedDetectionDataset(Dataset):
                     _allocated_mem += np.asarray(
                         self.images[self.segments_with_indexes_per_img_placeholder[self.subset_to_be_cached_idx[0]][image_idx]]).nbytes
                     # update RAM status
-                    pbar.desc = f"Caching images ({(self._init_allocated_mem + _allocated_mem) / 1E9: .3f} GB RAM)"
+                    pbar.desc = f"Caching images ({colorstr(options=['red', 'underline'], string_args=list([str((self._init_allocated_mem + _allocated_mem) / 1E9)])):>7} GB RAM)"
                 pbar.close()
             else:
                 # loop through samples
@@ -305,7 +313,7 @@ class CustomCachedDetectionDataset(Dataset):
                     _allocated_mem += np.asarray(
                         self.images[image_idx]).nbytes
                     # update RAM status
-                    pbar.desc = f"Caching images({(self._init_allocated_mem + _allocated_mem) / 1E9: .3f} GB RAM)"
+                    pbar.desc = f"Caching images ({colorstr(options=['red', 'underline'], string_args=list([str((self._init_allocated_mem + _allocated_mem) / 1E9)])):>7} GB RAM)"
                 pbar.close()
             else:
                 # initialize single threaded image fetching operation
@@ -337,7 +345,7 @@ class CustomCachedDetectionDataset(Dataset):
             msgs = "".join(msgs)
             msgs = re.sub(' +', ' ', msgs)
             msgs = re.sub('\n+', '\n', msgs)
-            print(f"{msgs}")
+            print(msgs)
 
         # extract labels (List[np.ndarray])
         self.labels = list(cache.values())

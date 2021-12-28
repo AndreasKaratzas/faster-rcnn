@@ -3,10 +3,7 @@ import argparse
 import copy
 import datetime
 import json
-import math
-import multiprocessing
 import os
-import platform
 import threading
 import warnings
 from pathlib import Path
@@ -14,7 +11,6 @@ from pathlib import Path
 import torch
 import torch.optim as optim
 import torchvision
-from torch.profiler import ProfilerActivity
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -28,7 +24,7 @@ from lib.model import configure_model
 from lib.nvidia import cuda_check
 from lib.plots import experiment_data_plots
 from lib.utils import (TraceWrapper, collate_fn, get_transform,
-                       weight_histograms)
+                       weight_histograms, colorstr)
 from lib.visual import VisualTest
 
 APEX_NOT_INSTALLED = False
@@ -75,15 +71,6 @@ if __name__ == "__main__":
                         help='Cache the images found in the dataset.')
     parser.add_argument('--cache-ratio', default=0.5, type=float,
                         help='Cache a percentage of images to avoid filling the whole RAM.')
-    parser.add_argument('--profiling', action='store_true',
-                        help='Profile the training loop.')
-    parser.add_argument('--prof-settings', default=[
-                        5, 5, 10, 3], nargs='+', type=int,
-                        help=f'Profiling settings. The order is:\n'
-                             f'1. wait (default: 5)\n'
-                             f'2. warmup (default: 5)\n'
-                             f'3. active (default: 10)\n'
-                             f'4. repeat (default: 3)')
     parser.add_argument(
         '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
     parser.add_argument('--aspect-ratios', default=[
@@ -110,8 +97,8 @@ if __name__ == "__main__":
                         help='Disable visualization of model as a graph in tensorboard.')
     parser.add_argument('--no-save', action='store_true',
                         help='Disable results export software.')
-    parser.add_argument('--no-threading-linux', action='store_true',
-                        help='Disable multithreading library in Linux due to possible race conditions.')
+    parser.add_argument('--no-multi-threading', action='store_true',
+                        help='Disable multithreading library optimizations.')
     parser.add_argument('--no-onnx', action='store_true',
                         help='Disable model export in ONNX format.')
     parser.add_argument('--generate-script-module', action='store_true',
@@ -148,20 +135,19 @@ if __name__ == "__main__":
                              f"Minimum class label must be equal to 1 and "
                              f"\n\t0 is reserved for background classification.")
         args.num_classes = max_class + 1
-        print(f"Number of classes found is {args.num_classes}.")
+        print(
+            f"Number of classes found is {colorstr(options=['red', 'underline'], string_args=list([str(args.num_classes)]))}.")
 
-    # check platform and reconfigure number of workers
-    if platform.system() == "Linux" and args.no_threading_linux:
-        # RuntimeError: received 0 items of ancdata
+    # Reconfigure number of workers
+    if args.no_multi_threading:
         args.num_workers = 1
-        print(f"WARNING:"
-              f"\n\tOS family is Linux."
-              f"\n\tLibrary `multithreading` in Python might not function well."
-              f"\n\tSetting number of workers equal to {args.num_workers}.\n")
+        print(
+            f"Setting number of workers equal to {colorstr(options=['red', 'underline'], string_args=list([str(args.num_workers)]))}.\n")
 
     # initialize the computation device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Device utilized:\t[{device}]\n")
+    print(
+        f"Device utilized: {colorstr(options=['red', 'underline'], string_args=list([device]))}.\n")
 
     if device == torch.device('cuda'):
         args.n_devices, cuda_arch = cuda_check()
@@ -169,13 +155,23 @@ if __name__ == "__main__":
         if not 'Turing' in cuda_arch and not 'Volta' in cuda_arch:
 
             if APEX_NOT_INSTALLED:
-                print(f"Found NVIDIA GPU of {cuda_arch} Architecture.")
-                print(f"Disabling apex software for mixed-precision model training.")
+                print(
+                    f"Found NVIDIA GPU of "
+                    f"{colorstr(options=['cyan'], string_args=list([cuda_arch]))} "
+                    f"Architecture.")
+                print(
+                    f"Disabling {colorstr(options=['cyan'], string_args=list(['NVIDIA', 'Apex']))} "
+                    f"software for mixed-precision model training.")
                 args.no_mixed_precision = True
 
         if not args.no_mixed_precision:
-            print(f"Found NVIDIA GPU of {cuda_arch} Architecture.")
-            print(f"Enabling apex software for mixed-precision model training.")
+            print(
+                f"Found NVIDIA GPU of "
+                f"{colorstr(options=['cyan'], string_args=list([cuda_arch]))} "
+                f"Architecture.")
+            print(
+                f"Enabling {colorstr(options=['cyan'], string_args=list(['NVIDIA', 'Apex']))} "
+                f"software for mixed-precision model training.")
 
     # training dataset
     train_data = CustomCachedDetectionDataset(
@@ -220,16 +216,19 @@ if __name__ == "__main__":
         args.anchor_sizes, args.aspect_ratios = autoanchors(
             dataloader=dataloader_valid)
         print(
-            f"\nSetting the following hyperparameters to the recommended values.\n"
-            f"\tTo disable the automated anchor software, pass the `--no-autoanchor` option.\n")
+            f"\nConfiguring anchors to the recommended values. "
+            f"To disable the automated anchor software, pass the "
+            f"{colorstr(options=['cyan'], string_args=list(['--no-autoanchor']))} option.\n")
 
     print(
-        f'Training Faster R-CNN for {args.epochs} epoch(s) with model backbone {args.backbone} with:\n'
-        f'{" ".join(str(args.trainable_layers)):>40} trainable layer(s)\n'
-        f'{" ".join([str(elem) for elem in args.anchor_sizes]):>40} anchor sizes and\n'
-        f'{" ".join([str(elem) for elem in args.aspect_ratios]):>40} aspect ratios\n\nDataset stats:\n'
-        f'\tLength of training data:\t{len(train_data):8d}\n'
-        f'\tLength of validation data:\t{len(val_data):8d}\n\n')
+        f'Training Faster R-CNN for '
+        f'{colorstr(options=["red", "underline"], string_args=list([str(args.epochs)]))} epoch(s) with model backbone '
+        f'{colorstr(options=["red", "underline"], string_args=list([args.backbone]))} with:\n'
+        f'{colorstr(options=["red", "underline"], string_args=list([" ".join(str(args.trainable_layers))])):>50} trainable layer(s)\n'
+        f'{colorstr(options=["red", "underline"], string_args=list([" ".join([str(elem) for elem in args.anchor_sizes])])):>50} anchor sizes and\n'
+        f'{colorstr(options=["red", "underline"], string_args=list([" ".join([str(elem) for elem in args.aspect_ratios])])):>50} aspect ratios\n\nDataset stats:\n'
+        f'\tLength of training data:\t{colorstr(options=["red", "underline"], string_args=list([str(len(train_data))])):>20}\n'
+        f'\tLength of validation data:\t{colorstr(options=["red", "underline"], string_args=list([str(len(val_data))])):>20}\n\n')
 
     # custom model init
     model = configure_model(
@@ -280,7 +279,8 @@ if __name__ == "__main__":
 
         args.start_epoch = checkpoint['epoch'] + 1
         print(
-            f"Training model from checkpoint {args.resume}. Starting from epoch {args.start_epoch}.")
+            f"Training model from checkpoint {colorstr(options=['red', 'underline'], string_args=list([args.resume]))}. "
+            f"Starting from epoch {colorstr(options=['red', 'underline'], string_args=list([str(args.start_epoch)]))}.")
 
     # prepare training logger
     with open(log_save_dir_train, "w") as f:
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     writer = SummaryWriter(log_save_dir, comment=args.project if args.project else "")
 
     # initialize a hyperparameter dictionary
-    hparams = {}
+    hyperparameters = {}
     # export experiment settings
     with open(config_save_dir, "w") as f:
         data = {}
@@ -327,8 +327,8 @@ if __name__ == "__main__":
 
         json.dump(data, f)
 
-        hparams.update(data['model'])
-        hparams.update(data['dataset'])
+        hyperparameters.update(data['model'])
+        hyperparameters.update(data['dataset'])
 
     if not args.no_model_graph:
         tb_model = TraceWrapper(model)
@@ -346,11 +346,9 @@ if __name__ == "__main__":
 
     # optional dataset sample visualization
     if not args.no_visual:
-        sample_ratio = 1e-2
-        n_samples = math.ceil(len(train_data) * sample_ratio)
-        if n_samples > 100:
-            n_samples = 100
-        print(f"Visualizing {n_samples} training images.")
+        n_samples = len(train_data) if len(train_data) < 100 else 100
+        print(
+            f"Visualizing {colorstr(options=['red', 'underline'], string_args=list([str(n_samples)]))} training images.")
         tb_idx = torch.randperm(len(train_data))[:n_samples]
         tb_sampler = torch.utils.data.SubsetRandomSampler(tb_idx)
         dataloader_tb = DataLoader(
@@ -395,42 +393,22 @@ if __name__ == "__main__":
                         grid = []
 
     if not args.no_mixed_precision:
-        print("RECOMMENDATION: Try training the model with mixed precision"
-              f" DISABLED except if your GPU really supports mixed precision.")
-        # Wrap the model
+        print(f"{colorstr(options=['cyan'], string_args=list(['RECOMMENDATION']))}: "
+              f"Try training the model with mixed precision "
+              f"{colorstr(options=['red', 'underline'], string_args=list(['DISABLED']))} "
+              f"except if your GPU really supports mixed precision.")
+        # Use mixed precision protocol from NVIDIA Apex software
         model, optimizer = amp.initialize(
             model, optimizer, opt_level=args.opt_level)
 
-    # profile the model
-    prof = None
-    if args.profiling:
-        prof = torch.profiler.profile(
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            schedule=torch.profiler.schedule(
-                wait=args.prof_settings[0],
-                warmup=args.prof_settings[1],
-                active=args.prof_settings[2],
-                repeat=args.prof_settings[3]),
-            on_trace_ready=torch.profiler.tensorboard_trace_handler(
-                log_save_dir),
-            use_cuda=True if device == torch.device("cuda") else False,
-            profile_memory=True,
-            with_flops=True,
-            with_modules=True,
-            record_shapes=True,
-            with_stack=True)
-
-        print(f"WARNING: Profiling is not recommended since it slows down "
-              f"training and requires a large amount of RAM memory space.")
-
-        prof.start()
-
     if not args.no_mixed_precision and not args.no_onnx:
-        print(f"WARNING: Model will not be stored as a ONNX file because "
+        print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
+              f"Model will not be stored as a ONNX file because "
               f"mixed precision is enabled.")
 
     if not args.no_mixed_precision and args.generate_script_module:
-        print(f"WARNING: Model will not be stored as a JIT script module "
+        print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
+              f"Model will not be stored as a JIT script module "
               f"because mixed precision is enabled.")
 
     # declare first thread cacher
@@ -439,8 +417,6 @@ if __name__ == "__main__":
     thread_cacher_sub_2 = threading.Thread(target=train_data._cache_images)
     # initialize dataloader placeholder
     dataloader_train_lst = []
-    # split dataset into memory friendly dataloaders
-    dataloader_train_idx = torch.randperm(len(train_data))
     # register training dataloaders
     if train_data.num_of_image_placeholders > 1 and args.cache:
         for subset in range(1, len(train_data.img_idx_segment_per_placeholer)):
@@ -486,14 +462,6 @@ if __name__ == "__main__":
 
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
-
-        if (epoch >= (
-            args.prof_settings[0] +
-            args.prof_settings[1] +
-            args.prof_settings[2]) *
-            args.prof_settings[3]
-            ) and args.profiling:
-            prof.stop()
         
         # initialize thread flags for syncing
         thread_cacher_sub_1_started = False
@@ -675,16 +643,8 @@ if __name__ == "__main__":
             traced_script_module.save(os.path.join(
                 model_save_dir, 'traced_last.pt'))
 
-        if (epoch < (
-            args.prof_settings[0] +
-            args.prof_settings[1] +
-            args.prof_settings[2]) *
-            args.prof_settings[3]
-            ) and args.profiling:
-            prof.step()
-
     # add experiment hyperparameters
-    writer.add_hparams(hparam_dict=hparams, metric_dict={
+    writer.add_hparams(hparam_dict=hyperparameters, metric_dict={
         'AveragePrecision': elite_model_criterion.ap_p,
         'AverageRecall': elite_model_criterion.ap_r
     })

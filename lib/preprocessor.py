@@ -105,8 +105,7 @@ def spatiotemporal_converter(input_filepath: str, output_dir: str, video_id: str
 
 def main():
     input_video_filepaths = [
-        'E:\\videos\\example_1.MP4',
-        'E:\\videos\\example_2.avi',
+        'D:\\example_video.MP4'
     ]
 
     output_root_dir = ""
