@@ -489,28 +489,7 @@ if __name__ == "__main__":
                               loss_rpn_box_reg_acc, epoch)
             
             if train_data.num_of_image_placeholders > 2 and args.cache:
-                entered_case_flag = False
-                if thread_cacher_sub_1_started and not entered_case_flag:
-                    thread_cacher_sub_1.join()
-                    thread_cacher_sub_1_started = False
-                    # declare first thread cacher
-                    thread_cacher_sub_1 = threading.Thread(
-                        target=train_data._cache_images)
-                    thread_cacher_sub_2.start()
-                    thread_cacher_sub_2_started = True 
-                    entered_case_flag = True
-                if thread_cacher_sub_2_started and not entered_case_flag:
-                    thread_cacher_sub_2.join()
-                    thread_cacher_sub_2_started = False
-                    # declare second thread cacher
-                    thread_cacher_sub_2 = threading.Thread(
-                        target=train_data._cache_images)
-                    thread_cacher_sub_1.start()
-                    thread_cacher_sub_1_started = True
-                    entered_case_flag = True
-                if not (thread_cacher_sub_1_started or thread_cacher_sub_2_started) and not entered_case_flag:
-                    thread_cacher_sub_1.start()
-                    thread_cacher_sub_1_started = True
+                train_data._cache_images()
 
         val_metrics = validate(model=model, dataloader=dataloader_valid, device=device,
                                log_filepath=log_save_dir_validation, epoch=epoch)

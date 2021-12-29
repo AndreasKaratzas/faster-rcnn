@@ -1,5 +1,6 @@
 # TODO
 
+* Resolve memory leak (curr_chkpt: cause -> thread spawn)
 * Refactor code with respect to latest torchvision updates in
     - https://github.com/pytorch/vision/tree/main/references/detection
     - https://pytorch.org/docs/master/notes/amp_examples.html#amp-examples
