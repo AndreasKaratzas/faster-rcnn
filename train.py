@@ -41,13 +41,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 if __name__ == "__main__":
 
-    if platform == "linux":
-        try:
-            multiprocessing.set_start_method('spawn')
-        except RuntimeError:
-            print(
-                f"Cannot set multiprocessing {colorstr(options=['red', 'underline'], string_args=list(['spawn']))} option.")
-
     parser = argparse.ArgumentParser(
         description='PyTorch Detection with Faster R-CNN.')
     parser.add_argument('--root-dir', default='./data',
