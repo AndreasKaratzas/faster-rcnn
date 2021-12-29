@@ -413,10 +413,6 @@ if __name__ == "__main__":
               f"Model will not be stored as a JIT script module "
               f"because mixed precision is enabled.")
 
-    # declare first thread cacher
-    thread_cacher_sub_1 = threading.Thread(target=train_data._cache_images)
-    # declare second thread cacher
-    thread_cacher_sub_2 = threading.Thread(target=train_data._cache_images)
     # initialize dataloader placeholder
     dataloader_train_lst = []
     # register training dataloaders
@@ -464,10 +460,6 @@ if __name__ == "__main__":
 
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
-        
-        # initialize thread flags for syncing
-        thread_cacher_sub_1_started = False
-        thread_cacher_sub_2_started = False
         
        # loop through all training dataloaders
         for idx, dataloader_train in enumerate(dataloader_train_lst):
