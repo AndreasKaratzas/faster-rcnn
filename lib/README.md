@@ -1,6 +1,11 @@
 # TODO
 
-* Colors in messages
+* Refactor code with respect to latest torchvision updates in
+    - https://github.com/pytorch/vision/tree/main/references/detection
+    - https://pytorch.org/docs/master/notes/amp_examples.html#amp-examples
+    - https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.StepLR.html
+    - https://pytorch.org/docs/stable/generated/torch.optim.lr_scheduler.LinearLR.html
+* Mention the complications due to optimization level 3 in mixed precision model training (with `NaN` type loss values)
 * Add docstrings
 * Confirm validation script
 * Note in README that there was an attempt to embed `torch.jit` in transforms but the process was too complicated and the documentation too little.

@@ -3,10 +3,12 @@ import argparse
 import copy
 import datetime
 import json
+import multiprocessing
 import os
 import threading
 import warnings
 from pathlib import Path
+from sys import platform
 
 import torch
 import torch.optim as optim
@@ -23,8 +25,8 @@ from lib.engine import train, validate
 from lib.model import configure_model
 from lib.nvidia import cuda_check
 from lib.plots import experiment_data_plots
-from lib.utils import (TraceWrapper, collate_fn, get_transform,
-                       weight_histograms, colorstr)
+from lib.utils import (TraceWrapper, collate_fn, colorstr, get_transform,
+                       weight_histograms)
 from lib.visual import VisualTest
 
 APEX_NOT_INSTALLED = False
@@ -38,6 +40,13 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 
 if __name__ == "__main__":
+
+    if platform == "linux":
+        try:
+            multiprocessing.set_start_method('spawn')
+        except RuntimeError:
+            print(
+                f"Cannot set multiprocessing {colorstr(options=['red', 'underline'], string_args=list(['spawn']))} option.")
 
     parser = argparse.ArgumentParser(
         description='PyTorch Detection with Faster R-CNN.')
@@ -72,9 +81,9 @@ if __name__ == "__main__":
     parser.add_argument('--cache-ratio', default=0.5, type=float,
                         help='Cache a percentage of images to avoid filling the whole RAM.')
     parser.add_argument(
-        '--anchor-sizes', default=[4, 8, 16, 32, 128], nargs='+', type=int, help='Anchor sizes.')
+        '--anchor-sizes', default=[16, 32, 64, 128, 256], nargs='+', type=int, help='Anchor sizes.')
     parser.add_argument('--aspect-ratios', default=[
-                        0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0], nargs='+', type=int,
+                        0.5, 1.0, 2.0], nargs='+', type=int,
                         help='Anchor ratios.')
     parser.add_argument('--no-autoanchor', action='store_true',
                         help='Disable anchor recommendation software.')
