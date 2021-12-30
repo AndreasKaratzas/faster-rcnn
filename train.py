@@ -3,7 +3,7 @@ import argparse
 import copy
 import datetime
 import json
-import multiprocessing
+import tracemalloc
 import os
 import threading
 import warnings
@@ -37,7 +37,7 @@ except ImportError:
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
-
+tracemalloc.start()
 
 if __name__ == "__main__":
 
@@ -413,6 +413,10 @@ if __name__ == "__main__":
               f"Model will not be stored as a JIT script module "
               f"because mixed precision is enabled.")
 
+    # declare first thread cacher
+    thread_cacher_sub_1 = threading.Thread(target=train_data._cache_images)
+    # declare second thread cacher
+    thread_cacher_sub_2 = threading.Thread(target=train_data._cache_images)
     # initialize dataloader placeholder
     dataloader_train_lst = []
     # register training dataloaders
@@ -461,6 +465,10 @@ if __name__ == "__main__":
     # start fitting the model
     for epoch in range(args.start_epoch, args.epochs):
         
+        # initialize thread flags for syncing
+        thread_cacher_sub_1_started = False
+        thread_cacher_sub_2_started = False
+        
        # loop through all training dataloaders
         for idx, dataloader_train in enumerate(dataloader_train_lst):
 
@@ -480,9 +488,40 @@ if __name__ == "__main__":
             writer.add_scalar('loss_rpn_box_reg/train',
                               loss_rpn_box_reg_acc, epoch)
             
+            snapshot1 = tracemalloc.take_snapshot()
+            
             if train_data.num_of_image_placeholders > 2 and args.cache:
-                train_data._cache_images()
+                entered_case_flag = False
+                if thread_cacher_sub_1_started and not entered_case_flag:
+                    thread_cacher_sub_1.join()
+                    thread_cacher_sub_1_started = False
+                    # declare first thread cacher
+                    thread_cacher_sub_1 = threading.Thread(
+                        target=train_data._cache_images)
+                    thread_cacher_sub_2.start()
+                    thread_cacher_sub_2_started = True 
+                    entered_case_flag = True
+                if thread_cacher_sub_2_started and not entered_case_flag:
+                    thread_cacher_sub_2.join()
+                    thread_cacher_sub_2_started = False
+                    # declare second thread cacher
+                    thread_cacher_sub_2 = threading.Thread(
+                        target=train_data._cache_images)
+                    thread_cacher_sub_1.start()
+                    thread_cacher_sub_1_started = True
+                    entered_case_flag = True
+                if not (thread_cacher_sub_1_started or thread_cacher_sub_2_started) and not entered_case_flag:
+                    thread_cacher_sub_1.start()
+                    thread_cacher_sub_1_started = True
 
+            snapshot2 = tracemalloc.take_snapshot()
+
+            top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+
+            print("[ Top 10 differences ]")
+            for stat in top_stats[:10]:
+                print(stat)
+            
         val_metrics = validate(model=model, dataloader=dataloader_valid, device=device,
                                log_filepath=log_save_dir_validation, epoch=epoch)
 
