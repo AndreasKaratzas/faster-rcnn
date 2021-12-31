@@ -8,7 +8,6 @@ import os
 import threading
 import warnings
 from pathlib import Path
-from sys import platform
 
 import torch
 import torch.optim as optim
