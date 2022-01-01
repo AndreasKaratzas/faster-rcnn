@@ -265,24 +265,6 @@ if __name__ == "__main__":
     # initialize lr scheduler
     lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'max')
 
-    # load checkpoint
-    if args.resume:
-        if not Path(args.resume).is_file():
-            raise ValueError(
-                f"Checkpoint filepath was not found. Tried to access {args.resume}.")
-        checkpoint = torch.load(args.resume, map_location=device)
-        model.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-
-        if type(checkpoint['amp']) is not None:
-            amp.load_state_dict(checkpoint['amp'])
-
-        args.start_epoch = checkpoint['epoch'] + 1
-        print(
-            f"Training model from checkpoint {colorstr(options=['red', 'underline'], string_args=list([args.resume]))}. "
-            f"Starting from epoch {colorstr(options=['red', 'underline'], string_args=list([str(args.start_epoch)]))}.")
-
     # prepare training logger
     with open(log_save_dir_train, "w") as f:
         f.write(
@@ -342,9 +324,6 @@ if __name__ == "__main__":
             use_strict_trace=True
         )
 
-    # load model to device
-    model = model.to(device)
-
     # optional dataset sample visualization
     if not args.no_visual:
         n_samples = len(train_data) if len(train_data) < 100 else 100
@@ -402,6 +381,27 @@ if __name__ == "__main__":
         model, optimizer = amp.initialize(
             model, optimizer, opt_level=args.opt_level)
 
+    # load checkpoint
+    if args.resume:
+        if not Path(args.resume).is_file():
+            raise ValueError(
+                f"Checkpoint filepath was not found. Tried to access {args.resume}.")
+        checkpoint = torch.load(args.resume, map_location=device)
+        model.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+
+        if type(checkpoint['amp']) is not None:
+            amp.load_state_dict(checkpoint['amp'])
+
+        args.start_epoch = checkpoint['epoch'] + 1
+        print(
+            f"Training model from checkpoint {colorstr(options=['red', 'underline'], string_args=list([args.resume]))}. "
+            f"Starting from epoch {colorstr(options=['red', 'underline'], string_args=list([str(args.start_epoch)]))}.")
+    
+    # load model to device
+    model = model.to(device)
+    
     if not args.no_mixed_precision and not args.no_onnx:
         print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
               f"Model will not be stored as a ONNX file because "
