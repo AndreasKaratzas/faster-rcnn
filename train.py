@@ -384,12 +384,6 @@ if __name__ == "__main__":
         # Use mixed precision protocol from NVIDIA Apex software
         model, optimizer = amp.initialize(
             model, optimizer, opt_level=args.opt_level)
-        
-        if args.resume:
-            if Path(args.resume).is_file():
-                checkpoint = torch.load(args.resume, map_location=device)
-                if type(checkpoint['amp']) is not None:
-                    amp.load_state_dict(checkpoint['amp'])
 
     # load checkpoint
     if args.resume:
@@ -398,9 +392,17 @@ if __name__ == "__main__":
             raise ValueError(
                 f"Checkpoint filepath was not found. Tried to access {args.resume}.")
         checkpoint = torch.load(args.resume, map_location=device)
+
         model.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        
+        try:
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        except ValueError as e:
+            print(e)
+
+        if type(checkpoint['amp']) is not None:
+            amp.load_state_dict(checkpoint['amp'])
 
         args.start_epoch = checkpoint['epoch'] + 1
         print(
