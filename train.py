@@ -371,6 +371,9 @@ if __name__ == "__main__":
                         writer.add_image('batch_' + str(sample_num), grid, 0)
                         sample_num += 1
                         grid = []
+    
+    # load model to device
+    model = model.to(device)
 
     if not args.no_mixed_precision:
         print(f"{colorstr(options=['cyan'], string_args=list(['RECOMMENDATION']))}: "
@@ -398,9 +401,6 @@ if __name__ == "__main__":
         print(
             f"Training model from checkpoint {colorstr(options=['red', 'underline'], string_args=list([args.resume]))}. "
             f"Starting from epoch {colorstr(options=['red', 'underline'], string_args=list([str(args.start_epoch)]))}.")
-    
-    # load model to device
-    model = model.to(device)
     
     if not args.no_mixed_precision and not args.no_onnx:
         print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
