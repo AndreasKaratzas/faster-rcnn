@@ -381,15 +381,15 @@ if __name__ == "__main__":
               f"{colorstr(options=['red', 'underline'], string_args=list(['DISABLED']))} "
               f"except if your GPU really supports mixed precision.")
         
+        # Use mixed precision protocol from NVIDIA Apex software
+        model, optimizer = amp.initialize(
+            model, optimizer, opt_level=args.opt_level)
+        
         if args.resume:
             if Path(args.resume).is_file():
                 checkpoint = torch.load(args.resume, map_location=device)
                 if type(checkpoint['amp']) is not None:
                     amp.load_state_dict(checkpoint['amp'])
-        
-        # Use mixed precision protocol from NVIDIA Apex software
-        model, optimizer = amp.initialize(
-            model, optimizer, opt_level=args.opt_level)
 
     # load checkpoint
     if args.resume:
