@@ -380,12 +380,20 @@ if __name__ == "__main__":
               f"Try training the model with mixed precision "
               f"{colorstr(options=['red', 'underline'], string_args=list(['DISABLED']))} "
               f"except if your GPU really supports mixed precision.")
+        
+        if args.resume:
+            if Path(args.resume).is_file():
+                checkpoint = torch.load(args.resume, map_location=device)
+                if type(checkpoint['amp']) is not None:
+                    amp.load_state_dict(checkpoint['amp'])
+        
         # Use mixed precision protocol from NVIDIA Apex software
         model, optimizer = amp.initialize(
             model, optimizer, opt_level=args.opt_level)
 
     # load checkpoint
     if args.resume:
+        # TODO: load anchor sizes and aspect ratios from CONFIG file
         if not Path(args.resume).is_file():
             raise ValueError(
                 f"Checkpoint filepath was not found. Tried to access {args.resume}.")
@@ -393,9 +401,6 @@ if __name__ == "__main__":
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-
-        if type(checkpoint['amp']) is not None:
-            amp.load_state_dict(checkpoint['amp'])
 
         args.start_epoch = checkpoint['epoch'] + 1
         print(
