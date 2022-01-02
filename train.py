@@ -107,6 +107,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
+    # TODO mention in readme that the export directory (`--root-dir` must be created a priori)
     if not Path(args.root_dir).is_dir():
         raise ValueError(
             f"Root directory is invalid. Value parsed {args.root_dir}.")
@@ -359,7 +360,7 @@ if __name__ == "__main__":
 
                     if target['boxes'].ndim < 1:
                         target['boxes'] = target['boxes'].unsqueeze(0)
-
+                    
                     sample_image = visualize.visualize(
                         img=image * 255, boxes=target['boxes'], labels=target['labels'],
                         no_visual=True, no_save=args.no_save)
