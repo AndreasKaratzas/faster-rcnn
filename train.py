@@ -3,7 +3,6 @@ import argparse
 import copy
 import datetime
 import json
-import tracemalloc
 import os
 import threading
 import warnings
@@ -36,7 +35,6 @@ except ImportError:
 
 
 warnings.filterwarnings("ignore", category=UserWarning)
-tracemalloc.start()
 
 if __name__ == "__main__":
 
@@ -100,8 +98,6 @@ if __name__ == "__main__":
                         help='Disable results export software.')
     parser.add_argument('--no-multi-threading', action='store_true',
                         help='Disable multithreading library optimizations.')
-    parser.add_argument('--no-onnx', action='store_true',
-                        help='Disable model export in ONNX format.')
     parser.add_argument('--generate-script-module', action='store_true',
                         help='Use `torch.jit.trace` to generate a `torch.jit.ScriptModule` via tracing.')
     args = parser.parse_args()
@@ -410,11 +406,6 @@ if __name__ == "__main__":
             f"Training model from checkpoint {colorstr(options=['red', 'underline'], string_args=list([args.resume]))}. "
             f"Starting from epoch {colorstr(options=['red', 'underline'], string_args=list([str(args.start_epoch)]))}.")
     
-    if not args.no_mixed_precision and not args.no_onnx:
-        print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
-              f"Model will not be stored as a ONNX file because "
-              f"mixed precision is enabled.")
-
     if not args.no_mixed_precision and args.generate_script_module:
         print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
               f"Model will not be stored as a JIT script module "
@@ -495,8 +486,6 @@ if __name__ == "__main__":
             writer.add_scalar('loss_rpn_box_reg/train',
                               loss_rpn_box_reg_acc, epoch)
             
-            snapshot1 = tracemalloc.take_snapshot()
-            
             if train_data.num_of_image_placeholders > 2 and args.cache:
                 entered_case_flag = False
                 if thread_cacher_sub_1_started and not entered_case_flag:
@@ -521,14 +510,6 @@ if __name__ == "__main__":
                     thread_cacher_sub_1.start()
                     thread_cacher_sub_1_started = True
 
-            snapshot2 = tracemalloc.take_snapshot()
-
-            top_stats = snapshot2.compare_to(snapshot1, 'lineno')
-
-            print("[ Top 10 differences ]")
-            for stat in top_stats[:10]:
-                print(stat)
-            
         val_metrics = validate(model=model, dataloader=dataloader_valid, device=device,
                                log_filepath=log_save_dir_validation, epoch=epoch)
 
@@ -564,35 +545,6 @@ if __name__ == "__main__":
                 'amp': amp.state_dict() if not args.no_mixed_precision else None
             }, os.path.join(model_save_dir, 'best.pt'))
 
-            if not args.no_onnx and args.no_mixed_precision:
-                onnx_model = copy.deepcopy(model)
-                onnx_model.to('cpu')
-
-                # Export the model
-                torch.onnx.export(
-                    # model being run
-                    onnx_model,
-                    # model input (or a tuple for multiple inputs)
-                    torch.rand([3, args.img_size, args.img_size]).unsqueeze(0),
-                    # where to save the model (can be a file or file-like object)
-                    os.path.join(model_save_dir, 'best.onnx'),
-                    # store the trained parameter weights inside the model file
-                    export_params=True,
-                    # the ONNX version to export the model to
-                    opset_version=10,
-                    # whether to execute constant folding for optimization
-                    do_constant_folding=True,
-                    # the model's input names
-                    input_names=['input'],
-                    # the model's output names
-                    output_names=['output'],
-                    # variable length axes
-                    dynamic_axes={
-                        'input': {0: 'batch_size'},
-                        'output': {0: 'batch_size'}
-                    },
-                    verbose=True
-                )
             if args.generate_script_module and args.no_mixed_precision:
                 model_copy = copy.deepcopy(model)
                 model_copy.to('cpu')
@@ -616,36 +568,6 @@ if __name__ == "__main__":
             'lr_scheduler': lr_scheduler.state_dict(),
             'amp': amp.state_dict() if not args.no_mixed_precision else None
         }, os.path.join(model_save_dir, 'last.pt'))
-
-        if not args.no_onnx and args.no_mixed_precision:
-            onnx_model = copy.deepcopy(model)
-            onnx_model.to('cpu')
-
-            # Export the model
-            torch.onnx.export(
-                # model being run
-                onnx_model,
-                # model input (or a tuple for multiple inputs)
-                torch.rand([3, args.img_size, args.img_size]).unsqueeze(0),
-                # where to save the model (can be a file or file-like object)
-                os.path.join(model_save_dir, 'last.onnx'),
-                # store the trained parameter weights inside the model file
-                export_params=True,
-                # the ONNX version to export the model to
-                opset_version=10,
-                # whether to execute constant folding for optimization
-                do_constant_folding=True,
-                # the model's input names
-                input_names=['input'],
-                # the model's output names
-                output_names=['output'],
-                # variable length axes
-                dynamic_axes={
-                    'input': {0: 'batch_size'},
-                    'output': {0: 'batch_size'}
-                },
-                verbose=True
-            )
 
         if args.generate_script_module and args.no_mixed_precision:
             model_copy = copy.deepcopy(model)
