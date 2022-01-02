@@ -98,8 +98,6 @@ if __name__ == "__main__":
                         help='Disable results export software.')
     parser.add_argument('--no-multi-threading', action='store_true',
                         help='Disable multithreading library optimizations.')
-    parser.add_argument('--generate-script-module', action='store_true',
-                        help='Use `torch.jit.trace` to generate a `torch.jit.ScriptModule` via tracing.')
     args = parser.parse_args()
 
     # TODO describe directory formatting ['train', 'valid' and then 'images', 'labels']
@@ -406,11 +404,6 @@ if __name__ == "__main__":
             f"Training model from checkpoint {colorstr(options=['red', 'underline'], string_args=list([args.resume]))}. "
             f"Starting from epoch {colorstr(options=['red', 'underline'], string_args=list([str(args.start_epoch)]))}.")
     
-    if not args.no_mixed_precision and args.generate_script_module:
-        print(f"{colorstr(options=['cyan'], string_args=list(['WARNING']))}: "
-              f"Model will not be stored as a JIT script module "
-              f"because mixed precision is enabled.")
-
     # declare first thread cacher
     thread_cacher_sub_1 = threading.Thread(target=train_data._cache_images)
     # declare second thread cacher
@@ -545,21 +538,6 @@ if __name__ == "__main__":
                 'amp': amp.state_dict() if not args.no_mixed_precision else None
             }, os.path.join(model_save_dir, 'best.pt'))
 
-            if args.generate_script_module and args.no_mixed_precision:
-                model_copy = copy.deepcopy(model)
-                model_copy.to('cpu')
-
-                # An example input provided to the defined model
-                example = torch.rand(
-                    [3, args.img_size, args.img_size]).unsqueeze(0)
-
-                # Use torch.jit.trace to generate a torch.jit.ScriptModule via tracing
-                traced_script_module = torch.jit.trace(model_copy, example)
-
-                # Serializing script module to a file
-                traced_script_module.save(os.path.join(
-                    model_save_dir, 'traced_best.pt'))
-
         # save last model to disk
         torch.save({
             'epoch': epoch,
@@ -568,21 +546,6 @@ if __name__ == "__main__":
             'lr_scheduler': lr_scheduler.state_dict(),
             'amp': amp.state_dict() if not args.no_mixed_precision else None
         }, os.path.join(model_save_dir, 'last.pt'))
-
-        if args.generate_script_module and args.no_mixed_precision:
-            model_copy = copy.deepcopy(model)
-            model_copy.to('cpu')
-
-            # An example input provided to the defined model
-            example = torch.rand(
-                [3, args.img_size, args.img_size]).unsqueeze(0)
-
-            # Use torch.jit.trace to generate a torch.jit.ScriptModule via tracing
-            traced_script_module = torch.jit.trace(model_copy, example)
-
-            # Serializing script module to a file
-            traced_script_module.save(os.path.join(
-                model_save_dir, 'traced_last.pt'))
 
     # add experiment hyperparameters
     writer.add_hparams(hparam_dict=hyperparameters, metric_dict={
