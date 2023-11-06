@@ -2,7 +2,6 @@
 import json
 import copy
 import torch
-import torch._six
 import numpy as np
 import pycocotools.mask as mask_util
 
@@ -177,7 +176,7 @@ def createIndex(self):
 
 
 maskUtils = mask_util
-
+string_classes = (str, bytes)
 
 def loadRes(self, resFile):
     """
@@ -191,7 +190,7 @@ def loadRes(self, resFile):
     res = COCO()
     res.dataset['images'] = [img for img in self.dataset['images']]
 
-    if isinstance(resFile, torch._six.string_classes):
+    if isinstance(resFile, string_classes):
         anns = json.load(open(resFile))
     elif type(resFile) == np.ndarray:
         anns = self.loadNumpyAnnotations(resFile)
